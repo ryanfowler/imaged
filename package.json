@@ -5,8 +5,9 @@
   "main": "dist/app.js",
   "scripts": {
     "build": "npx tsc",
+    "lint": "npx eslint lib --ext .ts --quiet",
     "start": "NODE_OPTIONS=--enable-source-maps TLS_MODE=off npx nodemon dist/app.js",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "echo \"No tests\" && exit 0",
     "watch": "npx tsc -w"
   },
   "author": "Ryan Fowler <ryan.fowler19@gmail.com>",
