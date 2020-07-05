@@ -1,6 +1,6 @@
 FROM node:14-alpine
 
-WORKDIR /imagex
+WORKDIR /imaged
 COPY package.json package-lock.json ./
 RUN npm install
 
