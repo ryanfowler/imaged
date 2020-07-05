@@ -22,7 +22,7 @@
     "node": ">=12.9.0"
   },
   "dependencies": {
-    "@koa/router": "^9.1.0",
+    "@koa/router": "^9.2.0",
     "koa": "^2.13.0",
     "node-fetch": "^2.6.0",
     "sharp": "^0.25.4"
