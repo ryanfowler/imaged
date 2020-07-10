@@ -38,17 +38,12 @@ export class Server {
     this.app.use(router.routes());
   }
 
-  listen = (port: number, tlsConfig?: TlsConfig): void => {
+  listen = (port: number, tlsConfig?: TlsConfig, cb?: () => void): void => {
     if (!tlsConfig) {
-      this.app.listen(port);
+      this.app.listen(port, cb);
       return;
     }
-    http2
-      .createSecureServer(
-        { key: tlsConfig.key, cert: tlsConfig.cert },
-        this.app.callback()
-      )
-      .listen(port);
+    http2.createSecureServer(tlsConfig, this.app.callback()).listen(port, cb);
   };
 }
 

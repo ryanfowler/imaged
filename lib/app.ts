@@ -11,5 +11,6 @@ const client = new Client({ concurrency: numCpus * 6 });
 const sharp = new Sharp({ concurrency: numCpus });
 
 const server = new Server({ fetcher: client, imageService: sharp });
-server.listen(config.port, config.tlsConfig);
-console.log(`Listening on port ${config.port}`);
+server.listen(config.port, config.tlsConfig, () => {
+  console.log(`Listening on port ${config.port}`);
+});
