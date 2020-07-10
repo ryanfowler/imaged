@@ -41,7 +41,7 @@ export class Sharp implements ImageService {
     await this.sema.acquire();
     try {
       const start = performance.now();
-      const res = await this.performInner(buf, ops);
+      const res = await performOp(buf, ops);
       const took = performance.now() - start;
       console.log(`Took ${took.toFixed(0)}ms`);
       return res;
@@ -49,33 +49,30 @@ export class Sharp implements ImageService {
       this.sema.release();
     }
   };
-
-  private performInner = (
-    buf: Buffer,
-    ops: ImageOptions
-  ): Promise<ImageResult> => {
-    let tx = sharp(buf, { sequentialRead: true });
-
-    tx = tx.rotate();
-
-    if (ops.blur) {
-      tx = tx.blur(ops.blur);
-    }
-
-    if (ops.height || ops.width) {
-      tx = tx.resize({
-        height: ops.height,
-        position: ops.crop ? cropPositions[ops.crop] : undefined,
-        width: ops.width,
-      });
-    }
-
-    tx = tx.toFormat(imageFormats[ops.format], {
-      lossless: ops.lossless,
-      progressive: ops.progressive,
-      quality: ops.quality,
-    });
-
-    return tx.toBuffer({ resolveWithObject: true });
-  };
 }
+
+const performOp = (buf: Buffer, ops: ImageOptions): Promise<ImageResult> => {
+  let tx = sharp(buf, { sequentialRead: true });
+
+  tx = tx.rotate();
+
+  if (ops.blur) {
+    tx = tx.blur(ops.blur);
+  }
+
+  if (ops.height || ops.width) {
+    tx = tx.resize({
+      height: ops.height,
+      position: ops.crop ? cropPositions[ops.crop] : undefined,
+      width: ops.width,
+    });
+  }
+
+  tx = tx.toFormat(imageFormats[ops.format], {
+    lossless: ops.lossless,
+    progressive: ops.progressive,
+    quality: ops.quality,
+  });
+
+  return tx.toBuffer({ resolveWithObject: true });
+};
