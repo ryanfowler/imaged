@@ -27,56 +27,16 @@ export interface ServerConfig {
 
 export class Server {
   private readonly app: Koa;
-  private readonly fetcher: Fetcher;
-  private readonly imageService: ImageService;
 
   constructor(config: ServerConfig) {
-    this.fetcher = config.fetcher;
-    this.imageService = config.imageService;
+    const { fetcher, imageService } = config;
 
     const router = new Router();
-    router.get("/image/:url", this.imageHandler);
+    router.get("/proxy/:url", imageHandler(fetcher, imageService));
 
     this.app = new Koa();
     this.app.use(router.routes());
   }
-
-  private imageHandler = async (
-    ctx: Koa.ParameterizedContext
-  ): Promise<void> => {
-    let url: string;
-    let params: ImageOptions;
-    try {
-      url = Buffer.from(ctx.params.url, "base64").toString("utf-8");
-      params = parseImageParams(ctx.query, ctx.get("accept"));
-    } catch (error) {
-      ctx.status = 400;
-      ctx.body = `${error}`;
-      return;
-    }
-
-    const buf = await run(this.fetcher.fetch(url));
-    if (buf.status === "rejected") {
-      ctx.status = 400;
-      ctx.body = `${buf.reason}`;
-      return;
-    }
-
-    const out = await run(this.imageService.perform(buf.value, params));
-    if (out.status === "rejected") {
-      ctx.status = 400;
-      ctx.body = `${out.reason}`;
-      return;
-    }
-
-    const value = out.value;
-    ctx.response.set({ "Content-Type": mimeTypes[params.format] });
-    ctx.response.set({ "X-Image-Height": value.info.height.toString(10) });
-    ctx.response.set({ "X-Image-Width": value.info.width.toString(10) });
-
-    ctx.status = 200;
-    ctx.body = value.data;
-  };
 
   listen = (port: number, tlsConfig?: TlsConfig): void => {
     if (!tlsConfig) {
@@ -91,3 +51,39 @@ export class Server {
       .listen(port);
   };
 }
+
+const imageHandler = (fetcher: Fetcher, imageService: ImageService) => {
+  return async (ctx: Koa.ParameterizedContext): Promise<void> => {
+    let params: ImageOptions;
+    try {
+      params = parseImageParams(ctx.query, ctx.get("accept"));
+    } catch (error) {
+      ctx.status = 400;
+      ctx.body = `${error}`;
+      return;
+    }
+
+    const url: string = ctx.params.url;
+    const buf = await run(fetcher.fetch(url));
+    if (buf.status === "rejected") {
+      ctx.status = 400;
+      ctx.body = `${buf.reason}`;
+      return;
+    }
+
+    const out = await run(imageService.perform(buf.value, params));
+    if (out.status === "rejected") {
+      ctx.status = 400;
+      ctx.body = `${out.reason}`;
+      return;
+    }
+
+    const value = out.value;
+    ctx.response.set({ "Content-Type": mimeTypes[params.format] });
+    ctx.response.set({ "X-Image-Height": value.info.height.toString(10) });
+    ctx.response.set({ "X-Image-Width": value.info.width.toString(10) });
+
+    ctx.status = 200;
+    ctx.body = value.data;
+  };
+};
