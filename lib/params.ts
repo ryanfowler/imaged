@@ -1,7 +1,5 @@
 import { CropType, ImageOptions, ImageType } from "./types";
 
-export type RawParams = { [key: string]: string | undefined };
-
 const cropParams: { [key: string]: CropType | undefined } = {
   attention: CropType.Attention,
   center: CropType.Centre,
@@ -17,8 +15,11 @@ const formatParams: { [key: string]: ImageType | undefined } = {
   webp: ImageType.WebP,
 };
 
-const getNumberParam = (params: RawParams, key: string): number | undefined => {
-  const value = params[key];
+const getNumberParam = (
+  params: URLSearchParams,
+  key: string
+): number | undefined => {
+  const value = params.get(key);
   if (!value) {
     return;
   }
@@ -30,10 +31,10 @@ const getNumberParam = (params: RawParams, key: string): number | undefined => {
 };
 
 const getBooleanParam = (
-  params: RawParams,
+  params: URLSearchParams,
   key: string
 ): boolean | undefined => {
-  const value = params[key];
+  const value = params.get(key);
   if (typeof value === "string") {
     return value !== "false" && value !== "0";
   }
@@ -47,7 +48,7 @@ const autoFormat = (accept: string): ImageType => {
 };
 
 export const parseImageParams = (
-  params: RawParams,
+  params: URLSearchParams,
   accept: string
 ): ImageOptions => {
   const blur = getNumberParam(params, "blur");
@@ -56,13 +57,13 @@ export const parseImageParams = (
   }
 
   let crop: CropType | undefined;
-  const cropValue = params["crop"];
+  const cropValue = params.get("crop");
   if (cropValue) {
     crop = cropParams[cropValue];
   }
 
   let format: ImageType | undefined;
-  const formatValue = params["format"];
+  const formatValue = params.get("format");
   if (formatValue === "auto") {
     format = autoFormat(accept);
   } else if (formatValue) {

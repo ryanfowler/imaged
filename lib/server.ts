@@ -51,7 +51,7 @@ const imageHandler = (fetcher: Fetcher, imageService: ImageService) => {
   return async (ctx: Koa.ParameterizedContext): Promise<void> => {
     let params: ImageOptions;
     try {
-      params = parseImageParams(ctx.query, ctx.get("accept"));
+      params = parseImageParams(ctx.URL.searchParams, ctx.get("accept"));
     } catch (error) {
       ctx.status = 400;
       ctx.body = `${error}`;
