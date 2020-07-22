@@ -25,8 +25,14 @@ export interface ServerConfig {
   imageService: ImageService;
 }
 
+interface Closer {
+  close: { (fn: () => void): void };
+}
+
 export class Server {
   private readonly app: Koa;
+  private server?: Closer;
+  private isShutdown = false;
 
   constructor(config: ServerConfig) {
     const { fetcher, imageService } = config;
@@ -40,10 +46,27 @@ export class Server {
 
   listen = (port: number, tlsConfig?: TlsConfig, cb?: () => void): void => {
     if (!tlsConfig) {
-      this.app.listen(port, cb);
+      this.server = this.app.listen(port, cb);
       return;
     }
-    http2.createSecureServer(tlsConfig, this.app.callback()).listen(port, cb);
+    this.server = http2
+      .createSecureServer(tlsConfig, this.app.callback())
+      .listen(port, cb);
+  };
+
+  // shutdown only _actually_ works with a non-http2 server.
+  // See: https://github.com/nodejs/node/issues/18176
+  shutdown = (): Promise<void> => {
+    return new Promise((resolve) => {
+      if (!this.server || this.isShutdown) {
+        resolve();
+        return;
+      }
+      this.isShutdown = true;
+      this.server.close(() => {
+        resolve();
+      });
+    });
   };
 }
 
