@@ -38,7 +38,7 @@ export interface ImageService {
 }
 
 export interface Fetcher {
-  fetch(url: string): Promise<Buffer>;
+  fetch(url: string | URL): Promise<Buffer>;
 }
 
 export interface TlsConfig {

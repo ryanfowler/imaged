@@ -32,7 +32,7 @@ export class Client implements Fetcher {
     this.httpsAgent.destroy();
   };
 
-  fetch = async (url: string): Promise<Buffer> => {
+  fetch = async (url: string | URL): Promise<Buffer> => {
     await this.sema.acquire();
     try {
       return await this.fetchInner(url);
@@ -41,11 +41,22 @@ export class Client implements Fetcher {
     }
   };
 
-  private fetchInner = async (url: string): Promise<Buffer> => {
-    const res = await fetch(url, { timeout: 20000 });
+  private fetchInner = async (url: string | URL): Promise<Buffer> => {
+    const res = await fetch(url, {
+      agent: this.agent,
+      timeout: 20000,
+      size: 1 << 27,
+    });
     if (!res.ok) {
       throw new Error(`fetch: received response code '${res.status}'`);
     }
     return res.buffer();
+  };
+
+  private agent = (url: URL): http.Agent => {
+    if (url.protocol === "http:") {
+      return this.httpAgent;
+    }
+    return this.httpsAgent;
   };
 }
