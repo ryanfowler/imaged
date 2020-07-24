@@ -1,6 +1,6 @@
 FROM node:14.5-alpine3.12 AS builder
 
-RUN apk add --update --no-cache build-base pkgconfig vips-dev=8.9.2-r0
+RUN apk add --update --no-cache build-base=0.5-r2 vips-dev=8.9.2-r0
 
 WORKDIR /imaged
 COPY package.json package-lock.json ./
