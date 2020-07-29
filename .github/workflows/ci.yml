@@ -23,9 +23,21 @@ jobs:
           ${{ runner.os }}-node-
     - name: Install dependencies
       run: npm install
-    - name: Lint
-      run: npm run lint
     - name: Build
       run: npm run build
+    - name: Lint
+      run: npm run lint
     - name: Test
       run: npm run test
+  build-docker:
+    name: Build Docker
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+    - name: Build
+      run: make build
+    - name: Lint
+      run: make lint
+    - name: Test
+      run: make test
