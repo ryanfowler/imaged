@@ -6,12 +6,9 @@ all:
 	@echo ""
 	@echo "commands:"
 	@echo "  build       - build the docker container"
-	@echo "  deps        - install all dependencies"
-	@echo "  lint        - run the gometalinter"
+	@echo "  lint        - run eslint"
 	@echo "  run         - run the service in a docker container"
-	@echo "  test        - run go tests in a docker container"
-	@echo "  update-deps - update all dependencies"
-	@echo "  vet         - run go vet in a docker container"
+	@echo "  test        - run tests in a docker container"
 
 build:
 	@docker build -f build/Dockerfile -t imaged .
@@ -20,7 +17,7 @@ build:
 lint: build
 	@docker run -i --rm --name imaged imagedbuilder npm run lint
 
-start: build
+run: build
 	@docker run -it --rm --env-file .env --name imaged -p 9000:9000 imaged
 
 test: build
