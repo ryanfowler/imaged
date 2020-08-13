@@ -1,4 +1,4 @@
-FROM node:14.7-alpine3.12 AS base
+FROM node:14.8-alpine3.12 AS base
 ENV VIPS_VERSION 8.10.0
 RUN apk add --no-cache --virtual .build-deps \
         build-base=0.5-r2 glib-dev=2.64.4-r0 expat-dev=2.2.9-r1 \
