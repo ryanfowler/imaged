@@ -11,8 +11,8 @@ all:
 	@echo "  test        - run tests in a docker container"
 
 build:
-	@docker build -f build/Dockerfile -t imaged .
-	@docker build -f build/Dockerfile -t imagedbuilder --target builder .
+	@docker build -t imagedbuilder --target builder .
+	@docker build -t imaged .
 
 lint: build
 	@docker run -i --rm --name imaged imagedbuilder npm run lint
