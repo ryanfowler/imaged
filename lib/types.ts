@@ -1,3 +1,5 @@
+import { performance } from "perf_hooks";
+
 export enum ImageType {
   Jpeg = "jpeg",
   Png = "png",
@@ -34,14 +36,55 @@ export interface ImageResult {
 }
 
 export interface ImageService {
-  perform(buf: Buffer, ops: ImageOptions): Promise<ImageResult>;
+  perform(
+    ctx: RequestContext,
+    buf: Buffer,
+    ops: ImageOptions
+  ): Promise<ImageResult>;
 }
 
 export interface Fetcher {
-  fetch(url: string | URL): Promise<Buffer>;
+  fetch(ctx: RequestContext, url: string | URL): Promise<Buffer>;
 }
 
 export interface TlsConfig {
   key: Buffer;
   cert: Buffer;
+}
+
+export class PendingEvent {
+  private start: number;
+  private cb: (ms: number) => void;
+
+  constructor(cb: (ms: number) => void) {
+    this.start = performance.now();
+    this.cb = cb;
+  }
+
+  end(): void {
+    this.cb(performance.now() - this.start);
+  }
+}
+
+interface RequestEvent {
+  name: string;
+  ms: number;
+}
+
+export class RequestContext {
+  private events: RequestEvent[] = [];
+
+  recordEvent(name: string): PendingEvent {
+    return new PendingEvent((ms: number) => {
+      this.events.push({ name, ms });
+    });
+  }
+
+  serverTimingHeader(): string {
+    return this.events
+      .map((event) => {
+        return `${event.name};dur=${event.ms.toFixed(1)}`;
+      })
+      .join(", ");
+  }
 }

@@ -4,10 +4,9 @@ import {
   ImageType,
   ImageResult,
   ImageService,
+  RequestContext,
 } from "./types";
 import { Semaphore } from "./semaphore";
-
-import { performance } from "perf_hooks";
 
 import sharp from "sharp";
 
@@ -37,15 +36,20 @@ export class Sharp implements ImageService {
     this.sema = new Semaphore(config.concurrency);
   }
 
-  perform = async (buf: Buffer, ops: ImageOptions): Promise<ImageResult> => {
+  perform = async (
+    ctx: RequestContext,
+    buf: Buffer,
+    ops: ImageOptions
+  ): Promise<ImageResult> => {
+    const acquireEvent = ctx.recordEvent("acquire_perform");
     await this.sema.acquire();
+    acquireEvent.end();
+
+    const performEvent = ctx.recordEvent("perform");
     try {
-      const start = performance.now();
-      const res = await performOp(buf, ops);
-      const took = performance.now() - start;
-      console.log(`Took ${took.toFixed(0)}ms`);
-      return res;
+      return await performOp(buf, ops);
     } finally {
+      performEvent.end();
       this.sema.release();
     }
   };
