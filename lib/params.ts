@@ -53,7 +53,7 @@ export const parseImageParams = (
 ): ImageOptions => {
   const blur = getNumberParam(params, "blur");
   if (typeof blur === "number" && (blur < 0 || blur > 100)) {
-    throw new Error("blur must be between 0 and 1000");
+    throw new Error("blur must be between 0 and 100");
   }
 
   let crop: CropType | undefined;

@@ -1,5 +1,5 @@
 import { Semaphore } from "./semaphore";
-import { Fetcher } from "./types";
+import { Fetcher, RequestContext } from "./types";
 
 import * as http from "http";
 import * as https from "https";
@@ -32,11 +32,16 @@ export class Client implements Fetcher {
     this.httpsAgent.destroy();
   };
 
-  fetch = async (url: string | URL): Promise<Buffer> => {
+  fetch = async (ctx: RequestContext, url: string | URL): Promise<Buffer> => {
+    const acquireEvent = ctx.recordEvent("acquire_fetch");
     await this.sema.acquire();
+    acquireEvent.end();
+
+    const fetchEvent = ctx.recordEvent("fetch");
     try {
       return await this.fetchInner(url);
     } finally {
+      fetchEvent.end();
       this.sema.release();
     }
   };

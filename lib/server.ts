@@ -4,6 +4,7 @@ import {
   ImageOptions,
   ImageService,
   ImageType,
+  RequestContext,
   TlsConfig,
 } from "./types";
 import { run } from "./util";
@@ -81,15 +82,17 @@ const imageHandler = (fetcher: Fetcher, imageService: ImageService) => {
       return;
     }
 
+    const reqCtx = new RequestContext();
+
     const url: string = ctx.params.url;
-    const buf = await run(fetcher.fetch(url));
+    const buf = await run(fetcher.fetch(reqCtx, url));
     if (buf.status === "rejected") {
       ctx.status = 400;
       ctx.body = `${buf.reason}`;
       return;
     }
 
-    const out = await run(imageService.perform(buf.value, params));
+    const out = await run(imageService.perform(reqCtx, buf.value, params));
     if (out.status === "rejected") {
       ctx.status = 400;
       ctx.body = `${out.reason}`;
@@ -100,6 +103,7 @@ const imageHandler = (fetcher: Fetcher, imageService: ImageService) => {
     ctx.response.set({ "Content-Type": mimeTypes[params.format] });
     ctx.response.set({ "X-Image-Height": value.info.height.toString(10) });
     ctx.response.set({ "X-Image-Width": value.info.width.toString(10) });
+    ctx.response.set({ "Server-Timing": reqCtx.serverTimingHeader() });
 
     ctx.status = 200;
     ctx.body = value.data;

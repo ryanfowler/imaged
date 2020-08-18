@@ -1,7 +1,7 @@
 import { TlsConfig } from "./types";
 
 const envPort = process.env.PORT;
-let port;
+let port: number;
 try {
   port = envPort ? parseInt(envPort) : 8000;
 } catch (e) {
