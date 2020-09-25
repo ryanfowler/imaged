@@ -39,6 +39,7 @@ export class Server {
     const { fetcher, imageService } = config;
 
     const router = new Router();
+    router.get("/health", healthHandler);
     router.get("/proxy/:url", imageHandler(fetcher, imageService));
 
     this.app = new Koa();
@@ -107,4 +108,9 @@ const imageHandler = (fetcher: Fetcher, imageService: ImageService) => {
     ctx.status = 200;
     ctx.body = value.data;
   };
+};
+
+const healthHandler = async (ctx: Koa.ParameterizedContext): Promise<void> => {
+  ctx.status = 200;
+  ctx.body = "OK";
 };
