@@ -1,7 +1,7 @@
 FROM node:14.11-alpine3.12 AS base
 ENV VIPS_VERSION 8.10.1
 RUN apk add --no-cache --virtual .build-deps \
-        build-base=0.5-r2 glib-dev=2.64.5-r0 expat-dev=2.2.9-r1 \
+        build-base=0.5-r2 glib-dev=2.64.6-r0 expat-dev=2.2.9-r1 \
     && apk add --update --no-cache \
         libjpeg-turbo-dev=2.0.5-r0 \
         libexif-dev=0.6.22-r0 \
