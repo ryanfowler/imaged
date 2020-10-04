@@ -1,5 +1,6 @@
 import config from "./config";
 import { Client } from "./fetch";
+import { logger } from "./logger";
 import { Server } from "./server";
 import { Sharp } from "./sharp";
 import { onSignals } from "./signals";
@@ -13,17 +14,17 @@ const sharp = new Sharp({ concurrency: numCpus });
 
 const server = new Server({ fetcher: client, imageService: sharp });
 server.listen(config.port, config.tlsConfig, () => {
-  console.log(`Listening on port '${config.port}'`);
+  logger.info({ port: config.port }, "server listening");
 });
 
 onSignals(["SIGTERM", "SIGINT", "SIGHUP"]).then(async (signal) => {
-  console.log(`Recieved signal: '${signal}'`);
+  logger.info({ signal }, "received signal");
   const timeout = setTimeout(() => {
-    console.log("Timeout reached!");
+    logger.info({}, "timeout reached");
     process.exit(1); // eslint-disable-line
   }, 5000);
   client.close();
   await server.shutdown();
-  console.log("Goodbye!");
+  logger.info({}, "goodbye");
   clearTimeout(timeout);
 });

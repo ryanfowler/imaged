@@ -1,3 +1,4 @@
+import { logger } from "./logger";
 import { parseImageParams } from "./params";
 import {
   Fetcher,
@@ -10,6 +11,7 @@ import {
 import { wait } from "./util";
 
 import http2 from "http2";
+import { performance } from "perf_hooks";
 
 import Router from "@koa/router";
 import Koa from "koa";
@@ -39,6 +41,7 @@ export class Server {
     const { fetcher, imageService } = config;
 
     const router = new Router();
+    router.use(loggingMiddlewaree);
     router.get("/health", healthHandler);
     router.get("/proxy/:url", imageHandler(fetcher, imageService));
 
@@ -113,4 +116,23 @@ const imageHandler = (fetcher: Fetcher, imageService: ImageService) => {
 const healthHandler = async (ctx: Koa.ParameterizedContext): Promise<void> => {
   ctx.status = 200;
   ctx.body = "OK";
+};
+
+const loggingMiddlewaree = async (
+  ctx: Koa.ParameterizedContext,
+  next: Koa.Next
+): Promise<void> => {
+  const start = performance.now();
+  await next();
+  const ms = Math.round(performance.now() - start);
+  logger.info(
+    {
+      method: ctx.method,
+      uri: `${ctx.URL.pathname}${ctx.URL.search}`,
+      source: ctx.ip,
+      code: ctx.status,
+      duration: ms,
+    },
+    "request complete"
+  );
 };

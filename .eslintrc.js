@@ -22,7 +22,7 @@ module.exports = {
   plugins: ["@typescript-eslint", "node", "prettier"],
   rules: {
     curly: ["error", "all"],
-    "no-console": "off",
+    "no-console": "error",
     "prettier/prettier": "error",
     "node/no-missing-import": "off",
     "node/no-unsupported-features/es-syntax": "off",
