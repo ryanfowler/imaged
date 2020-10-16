@@ -1,6 +1,5 @@
 interface Waiter {
   resolve: { (): void };
-  timer?: NodeJS.Timeout;
 }
 
 export class Semaphore {
@@ -15,20 +14,12 @@ export class Semaphore {
     this.size = size;
   }
 
-  acquire(timeoutMs?: number): Promise<void> {
+  acquire(): Promise<void> {
     if (this.tryAcquire()) {
       return Promise.resolve();
     }
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const w: Waiter = { resolve };
-      if (timeoutMs) {
-        w.timer = setTimeout(() => {
-          reject(new Error("semaphore: acquire timeout"));
-          this.queue = this.queue.filter((val) => {
-            return val !== w;
-          });
-        }, timeoutMs);
-      }
       this.queue.push(w);
     });
   }
@@ -48,9 +39,6 @@ export class Semaphore {
     const next = this.queue.shift();
     if (next) {
       next.resolve();
-      if (next.timer) {
-        clearTimeout(next.timer);
-      }
     } else {
       this.current -= 1;
     }
