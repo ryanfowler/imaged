@@ -41,7 +41,7 @@ export class Server {
     const { fetcher, imageService } = config;
 
     const router = new Router();
-    router.use(loggingMiddlewaree);
+    router.use(loggingMiddleware);
     router.get("/health", healthHandler);
     router.get("/proxy/:url", imageHandler(fetcher, imageService));
 
@@ -118,7 +118,7 @@ const healthHandler = async (ctx: Koa.ParameterizedContext): Promise<void> => {
   ctx.body = "OK";
 };
 
-const loggingMiddlewaree = async (
+const loggingMiddleware = async (
   ctx: Koa.ParameterizedContext,
   next: Koa.Next
 ): Promise<void> => {
