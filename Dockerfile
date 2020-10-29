@@ -44,4 +44,4 @@ WORKDIR /imaged
 COPY --from=prefinal /imaged/node_modules ./node_modules
 COPY --from=prefinal /imaged/dist ./dist
 COPY --from=prefinal /imaged/package.json .
-CMD ["node", "--enable-source-maps", "dist/app.js"]
+CMD ["node", "--enable-source-maps", "dist/lib/app.js"]
