@@ -9,7 +9,7 @@ import os from "os";
 
 const numCpus = os.cpus().length;
 
-const client = new Client({ concurrency: numCpus * 6 });
+const client = new Client({ concurrency: numCpus * 20 });
 const sharp = new Sharp({ concurrency: numCpus });
 
 const server = new Server({ fetcher: client, imageService: sharp });
