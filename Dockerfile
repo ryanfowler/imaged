@@ -6,7 +6,7 @@ RUN apk add --no-cache --virtual .build-deps \
         libjpeg-turbo-dev=2.0.5-r0 \
         libexif-dev=0.6.22-r0 \
         giflib-dev=5.2.1-r0 \
-        librsvg-dev=2.48.8-r0 \
+        librsvg-dev=2.48.9-r0 \
         tiff-dev=4.1.0-r0 \
         libpng-dev=1.6.37-r1 \
         libimagequant-dev=2.12.6-r0 \
