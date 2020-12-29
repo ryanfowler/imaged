@@ -13,6 +13,7 @@ import sharp from "sharp";
 sharp.cache(false);
 
 const imageFormats: { [_ in ImageType]: string } = {
+  [ImageType.Avif]: "avif",
   [ImageType.Jpeg]: "jpeg",
   [ImageType.Png]: "png",
   [ImageType.Tiff]: "tiff",

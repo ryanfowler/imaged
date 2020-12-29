@@ -7,7 +7,16 @@ const cropParams: { [key: string]: CropType | undefined } = {
   entropy: CropType.Entropy,
 };
 
+const defaultQuality: { [_ in ImageType]: number } = {
+  [ImageType.Avif]: 50,
+  [ImageType.Jpeg]: 75,
+  [ImageType.Png]: 75,
+  [ImageType.Tiff]: 75,
+  [ImageType.WebP]: 75,
+};
+
 const formatParams: { [key: string]: ImageType | undefined } = {
+  avif: ImageType.Avif,
   jpeg: ImageType.Jpeg,
   jpg: ImageType.Jpeg,
   png: ImageType.Png,
@@ -69,6 +78,7 @@ export const parseImageParams = (
   } else if (formatValue) {
     format = formatParams[formatValue];
   }
+  format = format ?? ImageType.Jpeg;
 
   const height = getNumberParam(params, "height");
   if (height && height < 0) {
@@ -92,11 +102,11 @@ export const parseImageParams = (
   return {
     blur,
     crop,
-    format: format ?? ImageType.Jpeg,
+    format,
     height,
     lossless,
     progressive,
-    quality: quality ?? 75,
+    quality: quality ?? defaultQuality[format],
     width,
   };
 };

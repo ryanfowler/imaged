@@ -1,6 +1,7 @@
 import { performance } from "perf_hooks";
 
 export enum ImageType {
+  Avif = "avif",
   Jpeg = "jpeg",
   Png = "png",
   Tiff = "tiff",
