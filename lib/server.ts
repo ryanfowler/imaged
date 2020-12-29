@@ -17,6 +17,7 @@ import Router from "@koa/router";
 import Koa from "koa";
 
 const mimeTypes: { [_ in ImageType]: string } = {
+  [ImageType.Avif]: "image/avif",
   [ImageType.Jpeg]: "image/jpeg",
   [ImageType.Png]: "image/png",
   [ImageType.Tiff]: "image/tiff",
