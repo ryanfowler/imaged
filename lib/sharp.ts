@@ -12,7 +12,9 @@ import sharp from "sharp";
 
 sharp.cache(false);
 
-const imageFormats: { [_ in ImageType]: string } = {
+type ImageFormat = "avif" | "jpeg" | "png" | "tiff" | "webp";
+
+const imageFormats: { [_ in ImageType]: ImageFormat } = {
   [ImageType.Avif]: "avif",
   [ImageType.Jpeg]: "jpeg",
   [ImageType.Png]: "png",
