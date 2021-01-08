@@ -24,7 +24,7 @@
     "@koa/router": "^10.0.0",
     "koa": "^2.13.1",
     "node-fetch": "^2.6.1",
-    "pino": "^6.9.0",
+    "pino": "^6.10.0",
     "sharp": "^0.27.0"
   },
   "devDependencies": {
