@@ -14,8 +14,6 @@ export class Client implements Fetcher {
     this.sema = new Semaphore(config.concurrency);
   }
 
-  close = (): void => {}; // eslint-disable-line
-
   fetch = async (ctx: RequestContext, url: string | URL): Promise<Buffer> => {
     const acquireEvent = ctx.recordEvent("acquire_fetch");
     await this.sema.acquire();

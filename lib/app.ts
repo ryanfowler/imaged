@@ -23,7 +23,6 @@ onSignals(["SIGTERM", "SIGINT", "SIGHUP"]).then(async (signal) => {
     logger.info({}, "timeout reached");
     process.exit(1); // eslint-disable-line
   }, 5000);
-  client.close();
   await server.shutdown();
   logger.info({}, "goodbye");
   clearTimeout(timeout);
