@@ -23,15 +23,14 @@
   "dependencies": {
     "@koa/router": "^10.0.0",
     "koa": "^2.13.1",
-    "node-fetch": "^2.6.1",
     "pino": "^6.11.1",
-    "sharp": "^0.27.1"
+    "sharp": "^0.27.1",
+    "undici": "^3.3.3"
   },
   "devDependencies": {
     "@types/koa": "^2.11.8",
     "@types/koa__router": "^8.0.4",
     "@types/node": "^14.14.28",
-    "@types/node-fetch": "^2.5.8",
     "@types/pino": "^6.3.5",
     "@types/sharp": "^0.27.1",
     "@typescript-eslint/eslint-plugin": "^4.15.0",
