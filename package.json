@@ -34,7 +34,7 @@
     "@types/pino": "^6.3.6",
     "@types/sharp": "^0.27.1",
     "@typescript-eslint/eslint-plugin": "^4.18.0",
-    "@typescript-eslint/parser": "^4.18.0",
+    "@typescript-eslint/parser": "^4.19.0",
     "eslint": "^7.22.0",
     "eslint-config-prettier": "^8.1.0",
     "eslint-plugin-node": "^11.1.0",
