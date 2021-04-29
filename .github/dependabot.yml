@@ -1,0 +1,20 @@
+version: 2
+updates:
+- package-ecosystem: npm
+  directory: "/"
+  schedule:
+    interval: daily
+    time: "10:00"
+  open-pull-requests-limit: 10
+  reviewers:
+  - ryanfowler
+  ignore:
+  - dependency-name: "@types/node"
+    versions:
+    - 14.14.23
+    - 14.14.24
+    - 14.14.39
+    - 15.0.0
+  - dependency-name: "@typescript-eslint/parser"
+    versions:
+    - 4.16.0
