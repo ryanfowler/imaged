@@ -30,7 +30,7 @@
   "devDependencies": {
     "@types/koa": "^2.13.1",
     "@types/koa__router": "^8.0.4",
-    "@types/node": "^15.0.2",
+    "@types/node": "^15.0.3",
     "@types/pino": "^6.3.8",
     "@types/sharp": "^0.28.1",
     "@typescript-eslint/eslint-plugin": "^4.23.0",
