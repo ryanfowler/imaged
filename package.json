@@ -6,7 +6,7 @@
     "build": "npx tsc",
     "lint": "npx eslint lib --ext .ts --quiet",
     "start": "NODE_OPTIONS=--enable-source-maps TLS_MODE=off npx nodemon dist/lib/app.js",
-    "test": "echo \"No tests\" && exit 0",
+    "test": "npx jest",
     "watch": "npx tsc -w"
   },
   "author": "Ryan Fowler <ryan.fowler19@gmail.com>",
@@ -20,6 +20,9 @@
   "engines": {
     "node": ">=12.9.0"
   },
+  "jest": {
+    "rootDir": "tests"
+  },
   "dependencies": {
     "@koa/router": "^10.0.0",
     "koa": "^2.13.1",
@@ -28,6 +31,10 @@
     "undici": "^4.0.0"
   },
   "devDependencies": {
+    "@babel/core": "^7.14.6",
+    "@babel/preset-env": "^7.14.5",
+    "@babel/preset-typescript": "^7.14.5",
+    "@types/jest": "^26.0.23",
     "@types/koa": "^2.13.3",
     "@types/koa__router": "^8.0.4",
     "@types/node": "^15.6.2",
@@ -35,10 +42,12 @@
     "@types/sharp": "^0.28.3",
     "@typescript-eslint/eslint-plugin": "^4.27.0",
     "@typescript-eslint/parser": "^4.27.0",
+    "babel-jest": "^27.0.2",
     "eslint": "^7.28.0",
     "eslint-config-prettier": "^8.3.0",
     "eslint-plugin-node": "^11.1.0",
     "eslint-plugin-prettier": "^3.4.0",
+    "jest": "^27.0.4",
     "nodemon": "^2.0.7",
     "prettier": "^2.3.1",
     "typescript": "~4.3.4"
