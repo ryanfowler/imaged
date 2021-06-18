@@ -22,6 +22,14 @@ lint: build
 run: build
 	@docker run -it --rm --env-file .env --name imaged -p 9000:9000 imaged
 
+.PHONY: start
+start: build
+	@docker run -itd --rm --env PORT=9000 --env TLS_MODE=off --network host --name imaged -p 9000:9000 imaged
+
+.PHONY: stop
+stop:
+	@docker stop imaged
+
 .PHONY: test
 test: build
-	@docker run -i --rm --name imaged imagedbuilder npm run test
+	@docker run -i --rm --name imagedtest --network host imagedbuilder npm run test

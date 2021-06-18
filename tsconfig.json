@@ -10,7 +10,7 @@
     "sourceMap": true,
     "strict": true,
     "preserveWatchOutput": true,
-    "types": ["node"],
+    "types": ["jest", "node"],
     "outDir": "dist"
   }
 }
