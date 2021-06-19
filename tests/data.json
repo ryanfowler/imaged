@@ -1,0 +1,34 @@
+{
+  "inputs": [
+    {
+      "format": "jpeg",
+      "url": "https://user-images.githubusercontent.com/2668821/122620831-cec26080-d048-11eb-95a5-b6eaf986c13f.jpeg"
+    },
+    {
+      "format": "png",
+      "url": "https://user-images.githubusercontent.com/2668821/122628058-a8acb880-d068-11eb-8852-79232130364e.png"
+    }
+  ],
+  "outputs": [
+    {
+      "format": "jpeg",
+      "sharpFormat": "jpeg"
+    },
+    {
+      "format": "webp",
+      "sharpFormat": "webp"
+    },
+    {
+      "format": "png",
+      "sharpFormat": "png"
+    },
+    {
+      "format": "avif",
+      "sharpFormat": "heif"
+    },
+    {
+      "format": "tiff",
+      "sharpFormat": "tiff"
+    }
+  ]
+}
