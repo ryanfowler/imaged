@@ -5,11 +5,14 @@ import { request } from "undici";
 
 sharp.cache(false);
 
+const port = process.env.PORT ?? "9000";
+const host = process.env.HOST ?? "localhost";
+
 export async function getImageMetadata(
   imageUrl: string,
   options?: Record<string, string>
 ): Promise<sharp.Metadata> {
-  let urlStr = `http://localhost:9000/proxy/${encodeURIComponent(imageUrl)}`;
+  let urlStr = `http://${host}:${port}/proxy/${encodeURIComponent(imageUrl)}`;
   if (options) {
     const query = new URLSearchParams();
     for (const [key, value] of Object.entries(options)) {
