@@ -45,8 +45,11 @@ export class Sharp implements ImageService {
     ops: ImageOptions
   ): Promise<ImageResult> => {
     const acquireEvent = ctx.recordEvent("acquire_perform");
-    await this.sema.acquire();
-    acquireEvent.end();
+    try {
+      await this.sema.acquire();
+    } finally {
+      acquireEvent.end();
+    }
 
     const performEvent = ctx.recordEvent("perform");
     try {
