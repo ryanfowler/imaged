@@ -1,13 +1,16 @@
+PORT ?= 9000
+
 .PHONY: all
 all:
 	@echo "imaged"
 	@echo "make <cmd>"
 	@echo ""
 	@echo "commands:"
-	@echo "  build       - build the docker container"
-	@echo "  lint        - run eslint"
-	@echo "  run         - run the service in a docker container"
-	@echo "  test        - run tests in a docker container"
+	@echo "  build       - build the imaged docker container"
+	@echo "  lint        - run eslint in a docker container"
+	@echo "  start       - start the imaged service in a docker container"
+	@echo "  stop        - stop the running imaged docker container"
+	@echo "  test        - run integration tests in a docker container"
 
 .PHONY: build
 build:
@@ -16,15 +19,11 @@ build:
 
 .PHONY: lint
 lint: build
-	@docker run -i --rm --name imaged imagedbuilder npm run lint
-
-.PHONY: run
-run: build
-	@docker run -it --rm --env-file .env --name imaged -p 9000:9000 imaged
+	@docker run -i --rm --name imagedlint imagedbuilder npm run lint
 
 .PHONY: start
 start: build
-	@docker run -itd --rm --env PORT=9000 --env TLS_MODE=off --network host --name imaged -p 9000:9000 imaged
+	@docker run -itd --rm --env PORT=$(PORT) --env TLS_MODE=off --name imaged -p $(PORT):$(PORT) imaged
 
 .PHONY: stop
 stop:
@@ -32,4 +31,4 @@ stop:
 
 .PHONY: test
 test: build
-	@docker run -i --rm --name imagedtest --network host imagedbuilder npm run test
+	@docker run -i --rm --env PORT=$(PORT) --name imagedtest --network host imagedbuilder npm run test
