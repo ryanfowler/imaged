@@ -39,7 +39,7 @@
     "@types/koa__router": "^8.0.7",
     "@types/node": "^16.4.5",
     "@types/pino": "^6.3.11",
-    "@types/sharp": "^0.28.4",
+    "@types/sharp": "^0.28.5",
     "@typescript-eslint/eslint-plugin": "^4.28.5",
     "@typescript-eslint/parser": "^4.28.5",
     "babel-jest": "^27.0.6",
