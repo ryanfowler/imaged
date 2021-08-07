@@ -33,7 +33,7 @@
   "devDependencies": {
     "@babel/core": "^7.15.0",
     "@babel/preset-env": "^7.14.9",
-    "@babel/preset-typescript": "^7.14.5",
+    "@babel/preset-typescript": "^7.15.0",
     "@types/jest": "^26.0.24",
     "@types/koa": "^2.13.4",
     "@types/koa__router": "^8.0.7",
