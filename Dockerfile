@@ -1,4 +1,4 @@
-FROM node:16.13-alpine3.15 AS base
+FROM node:18.0-alpine3.15 AS base
 
 FROM base AS builder
 RUN apk add --update --no-cache build-base=0.5-r2
