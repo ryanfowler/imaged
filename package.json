@@ -27,7 +27,7 @@
     "@koa/router": "^10.1.1",
     "koa": "^2.13.4",
     "pino": "^7.11.0",
-    "sharp": "^0.30.4",
+    "sharp": "^0.30.5",
     "undici": "^5.2.0"
   },
   "devDependencies": {
@@ -42,7 +42,7 @@
     "@typescript-eslint/eslint-plugin": "^5.25.0",
     "@typescript-eslint/parser": "^5.25.0",
     "babel-jest": "^28.1.0",
-    "eslint": "^8.15.0",
+    "eslint": "^8.16.0",
     "eslint-config-prettier": "^8.5.0",
     "eslint-plugin-node": "^11.1.0",
     "eslint-plugin-prettier": "^4.0.0",
