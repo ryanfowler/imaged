@@ -31,4 +31,4 @@ stop:
 
 .PHONY: test
 test: build
-	@docker run -i --rm --env PORT=$(PORT) --name imagedtest --network host imagedbuilder npm run test
+	@docker run -i --rm --name imagedtest --network host imagedbuilder npm run test
