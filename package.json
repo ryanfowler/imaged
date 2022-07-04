@@ -24,7 +24,7 @@
     "rootDir": "tests"
   },
   "dependencies": {
-    "@koa/router": "^10.1.1",
+    "@koa/router": "^11.0.1",
     "koa": "^2.13.4",
     "pino": "^8.1.0",
     "sharp": "^0.30.7",
