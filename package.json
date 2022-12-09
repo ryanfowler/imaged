@@ -28,7 +28,7 @@
     "koa": "^2.14.1",
     "pino": "^8.7.0",
     "sharp": "^0.31.2",
-    "undici": "^5.13.0"
+    "undici": "^5.14.0"
   },
   "devDependencies": {
     "@babel/core": "^7.20.5",
