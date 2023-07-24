@@ -27,7 +27,7 @@
     "@koa/router": "^12.0.0",
     "koa": "^2.14.2",
     "pino": "^8.14.1",
-    "sharp": "^0.32.3",
+    "sharp": "^0.32.4",
     "undici": "^5.22.1"
   },
   "devDependencies": {
