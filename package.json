@@ -35,7 +35,7 @@
     "@babel/preset-env": "^7.22.9",
     "@babel/preset-typescript": "^7.22.5",
     "@types/jest": "^27.5.0",
-    "@types/koa": "^2.13.6",
+    "@types/koa": "^2.13.7",
     "@types/koa__router": "^12.0.0",
     "@types/node": "^20.4.5",
     "@types/sharp": "^0.32.0",
