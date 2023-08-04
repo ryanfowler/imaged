@@ -121,7 +121,7 @@ const healthHandler = async (ctx: Koa.ParameterizedContext): Promise<void> => {
 
 const loggingMiddleware = async (
   ctx: Koa.ParameterizedContext,
-  next: Koa.Next
+  next: Koa.Next,
 ): Promise<void> => {
   const start = performance.now();
   await next();
@@ -134,6 +134,6 @@ const loggingMiddleware = async (
       code: ctx.status,
       duration: ms,
     },
-    "request complete"
+    "request complete",
   );
 };

@@ -42,7 +42,7 @@ export class Sharp implements ImageService {
   perform = async (
     ctx: RequestContext,
     buf: Buffer,
-    ops: ImageOptions
+    ops: ImageOptions,
   ): Promise<ImageResult> => {
     const acquireEvent = ctx.recordEvent("acquire_perform");
     try {

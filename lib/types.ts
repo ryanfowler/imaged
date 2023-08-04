@@ -40,7 +40,7 @@ export interface ImageService {
   perform(
     ctx: RequestContext,
     buf: Buffer,
-    ops: ImageOptions
+    ops: ImageOptions,
   ): Promise<ImageResult>;
 }
 

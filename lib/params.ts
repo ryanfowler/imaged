@@ -26,7 +26,7 @@ const formatParams: { [key: string]: ImageType | undefined } = {
 
 const getNumberParam = (
   params: URLSearchParams,
-  key: string
+  key: string,
 ): number | undefined => {
   const value = params.get(key);
   if (!value) {
@@ -41,7 +41,7 @@ const getNumberParam = (
 
 const getBooleanParam = (
   params: URLSearchParams,
-  key: string
+  key: string,
 ): boolean | undefined => {
   const value = params.get(key);
   if (typeof value === "string") {
@@ -58,7 +58,7 @@ const autoFormat = (accept: string): ImageType => {
 
 export const parseImageParams = (
   params: URLSearchParams,
-  accept: string
+  accept: string,
 ): ImageOptions => {
   const blur = getNumberParam(params, "blur");
   if (typeof blur === "number" && (blur < 0 || blur > 100)) {
