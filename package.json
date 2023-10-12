@@ -31,7 +31,7 @@
     "undici": "^5.25.4"
   },
   "devDependencies": {
-    "@babel/core": "^7.23.0",
+    "@babel/core": "^7.23.2",
     "@babel/preset-env": "^7.22.20",
     "@babel/preset-typescript": "^7.23.0",
     "@types/jest": "^27.5.0",
