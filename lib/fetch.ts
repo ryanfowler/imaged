@@ -1,8 +1,6 @@
 import { Semaphore } from "./semaphore";
 import { Fetcher, RequestContext } from "./types";
 
-import { request } from "undici";
-
 interface ClientConfig {
   concurrency: number;
 }
@@ -29,14 +27,10 @@ export class Client implements Fetcher {
   };
 
   private fetchInner = async (url: string | URL): Promise<Buffer> => {
-    const res = await request(url);
-    if (res.statusCode !== 200) {
-      throw new Error(`fetch: received response code '${res.statusCode}'`);
+    const res = await fetch(url);
+    if (res.status !== 200) {
+      throw new Error(`fetch: received response code '${res.status}'`);
     }
-    const out = [];
-    for await (const data of res.body) {
-      out.push(data);
-    }
-    return Buffer.concat(out);
+    return Buffer.from(await res.arrayBuffer());
   };
 }

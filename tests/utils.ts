@@ -1,7 +1,6 @@
 import { URLSearchParams } from "url";
 
 import sharp from "sharp";
-import { request } from "undici";
 
 sharp.cache(false);
 
@@ -20,18 +19,14 @@ export async function getImageMetadata(
     }
     urlStr += `?${query.toString()}`;
   }
-  const out = await fetch(urlStr);
+  const out = await fetch_image(urlStr);
   return sharp(out, { sequentialRead: true }).metadata();
 }
 
-async function fetch(url: string): Promise<Buffer> {
-  const res = await request(url);
-  if (res.statusCode !== 200) {
-    throw new Error(`fetch: received response code '${res.statusCode}'`);
+async function fetch_image(url: string): Promise<Buffer> {
+  const res = await fetch(url);
+  if (res.status !== 200) {
+    throw new Error(`fetch: received response code '${res.status}'`);
   }
-  const out = [];
-  for await (const data of res.body) {
-    out.push(data);
-  }
-  return Buffer.concat(out);
+  return Buffer.from(await res.arrayBuffer());
 }
