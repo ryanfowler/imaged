@@ -1,0 +1,21 @@
+[package]
+name = "imagetest"
+version = "0.1.0"
+edition = "2021"
+
+[profile.release]
+codegen-units = 1
+debug = false
+lto = true
+opt-level = 3
+strip = true
+
+[dependencies]
+axum = "*"
+image = "*"
+jemallocator = { version = "*" }
+kamadak-exif = "*"
+mime = "*"
+tokio = { version = "*", features = ["rt", "net", "macros"] }
+turbojpeg = { version = "*", features = ["image"] }
+webp = "*"
