@@ -17,6 +17,7 @@ bytes = "*"
 image = { version = "*", default-features = false, features = ["png", "tiff"] }
 jemallocator = { version = "*" }
 kamadak-exif = "*"
+libavif = "*"
 libavif-image = "*"
 mime = "*"
 reqwest = "*"
