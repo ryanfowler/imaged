@@ -1,14 +1,32 @@
-use std::fmt::Write;
+use std::{
+    fmt::Write,
+    time::{Duration, SystemTime},
+};
 
-use axum::response::IntoResponse;
+use axum::{
+    extract::{Query, State},
+    http::StatusCode,
+    response::{IntoResponse, Response},
+};
 use image::GenericImageView;
+use reqwest::Client;
+
+mod img;
 
 #[global_allocator]
 static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
-    let app = axum::Router::new().route("/", axum::routing::get(get_image));
+    let client = reqwest::Client::builder()
+        .user_agent("imaged")
+        .timeout(Duration::from_secs(60))
+        .build()
+        .unwrap();
+
+    let app = axum::Router::new()
+        .route("/", axum::routing::get(get_image))
+        .with_state(client);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8000").await.unwrap();
     axum::serve(listener, app).await.unwrap();
@@ -16,26 +34,41 @@ async fn main() {
 
 // const RAW_IMG: &[u8] = include_bytes!("/Users/ryanfowler/Documents/IMG_1502.jpg");
 
-async fn get_image() -> axum::response::Response {
-    tokio::task::spawn_blocking(|| {
-        let mut timings = Vec::new();
+async fn get_image(Query(query): Query<ImageQuery>, State(client): State<Client>) -> Response {
+    let mut timings = Vec::new();
 
-        let start = std::time::SystemTime::now();
-        let raw_img = std::fs::read("/Users/ryanfowler/Documents/IMG_1502.jpg").unwrap();
+    let start = SystemTime::now();
+    let body = match client.get(&query.url).send().await {
+        Err(_) => return (StatusCode::BAD_REQUEST).into_response(),
+        Ok(res) => match res.bytes().await {
+            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR).into_response(),
+            Ok(body) => body,
+        },
+    };
+    timings.push(ServerTimingValue {
+        name: "download",
+        dur: ms_since(start),
+    });
+
+    tokio::task::spawn_blocking(move || {
+        // let mut timings = Vec::new();
+
+        // let start = std::time::SystemTime::now();
+        // let raw_img = std::fs::read("/Users/ryanfowler/Documents/IMG_1502.jpg").unwrap();
         // let raw_img = std::fs::read("/Users/ryanfowler/Downloads/GBZL8i_aAAAicUE.jpeg").unwrap();
         // let raw_img = std::fs::read("/Users/ryanfowler/Downloads/dinodog.jpg").unwrap();
-        timings.push(ServerTimingValue {
-            name: "readfile",
-            dur: ms_since(start),
-        });
+        // timings.push(ServerTimingValue {
+        //     name: "readfile",
+        //     dur: ms_since(start),
+        // });
 
-        let format = image::guess_format(&raw_img).unwrap();
+        let format = image::guess_format(&body).unwrap();
         if format != image::ImageFormat::Jpeg {
             return (axum::http::StatusCode::INTERNAL_SERVER_ERROR).into_response();
         }
 
         let start = std::time::SystemTime::now();
-        let mut cursor = std::io::Cursor::new(&raw_img);
+        let mut cursor = std::io::Cursor::new(&body);
         if let Ok(meta) = exif::Reader::new().read_from_container(&mut cursor) {
             timings.push(ServerTimingValue {
                 name: "exif",
@@ -60,12 +93,14 @@ async fn get_image() -> axum::response::Response {
         }
 
         let start = std::time::SystemTime::now();
-        let img: image::RgbImage = turbojpeg::decompress_image(&raw_img).unwrap();
+        let img: image::RgbImage = turbojpeg::decompress_image(&body).unwrap();
         let mut img = image::DynamicImage::from(img);
         timings.push(ServerTimingValue {
             name: "decompress",
             dur: ms_since(start),
         });
+
+        let (orig_width, orig_height) = img.dimensions();
 
         let start = std::time::SystemTime::now();
         img = img.thumbnail(1008, 756);
@@ -108,6 +143,18 @@ async fn get_image() -> axum::response::Response {
         res = res.header("server-timing", &thdr);
         res = res.header("x-image-width", width);
         res = res.header("x-image-height", height);
+
+        if query.is_debug() {
+            let raw = serde_json::to_string(&ImageDebug {
+                original_size: body.len() as u64,
+                original_width: orig_width,
+                original_height: orig_height,
+                original_format: "jpeg",
+            })
+            .unwrap();
+            res = res.header("x-image-debug", &raw);
+        }
+
         res.body(axum::body::Body::from(out)).unwrap()
 
         // (
@@ -141,6 +188,35 @@ fn ms_since(start: std::time::SystemTime) -> f32 {
         .unwrap()
         .as_secs_f32()
         * 1000.0
+}
+
+#[derive(serde::Deserialize)]
+struct ImageQuery {
+    url: String,
+
+    #[serde(default)]
+    debug: Option<String>,
+    #[serde(default)]
+    height: Option<u32>,
+    #[serde(default)]
+    width: Option<u32>,
+}
+
+impl ImageQuery {
+    fn is_debug(&self) -> bool {
+        if let Some(v) = &self.debug {
+            return v != "false";
+        }
+        false
+    }
+}
+
+#[derive(serde::Serialize)]
+struct ImageDebug {
+    original_height: u32,
+    original_width: u32,
+    original_size: u64,
+    original_format: &'static str,
 }
 
 #[derive(Clone, Debug, Default)]
