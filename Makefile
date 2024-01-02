@@ -1,4 +1,4 @@
-PORT ?= 9000
+PORT ?= 8000
 
 .PHONY: all
 all:
@@ -14,21 +14,12 @@ all:
 
 .PHONY: build
 build:
-	@docker build -t imagedbuilder --target builder .
 	@docker build -t imaged .
-
-.PHONY: lint
-lint: build
-	@docker run -i --rm --name imagedlint imagedbuilder npm run lint
 
 .PHONY: start
 start: build
-	@docker run -itd --rm --env PORT=$(PORT) --env TLS_MODE=off --name imaged -p $(PORT):$(PORT) imaged
+	@docker run -itd --rm --network host --env PORT=$(PORT) --name imaged -p $(PORT):$(PORT) imaged
 
 .PHONY: stop
 stop:
 	@docker stop imaged
-
-.PHONY: test
-test: build
-	@docker run -i --rm --name imagedtest --network host imagedbuilder npm run test
