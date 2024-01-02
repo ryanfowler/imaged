@@ -79,6 +79,16 @@ impl ImageType {
             ImageType::Webp => "image/webp",
         }
     }
+
+    fn default_quality(&self) -> u8 {
+        match self {
+            ImageType::Avif => 50,
+            ImageType::Jpeg => 75,
+            ImageType::Png => 75,
+            ImageType::Tiff => 75,
+            ImageType::Webp => 75,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -136,7 +146,7 @@ fn process_image_inner<T: AsRef<[u8]>>(
     let (width, height) = out_img.dimensions();
 
     let out_type = ops.out_type.unwrap_or(img_type);
-    let quality = ops.quality.unwrap_or(75);
+    let quality = ops.quality.unwrap_or_else(|| out_type.default_quality());
     let buf = encode_image(out_img, out_type, quality)?;
 
     Ok(ImageOutput {
@@ -234,9 +244,40 @@ fn encode_image(
     }
 }
 
-fn encode_avif(img: DynamicImage, _quality: u8) -> Result<Vec<u8>, anyhow::Error> {
-    // TODO(rfowler): Use Encoder directly to set quality.
-    Ok(libavif_image::save(&img)?.to_owned())
+fn encode_avif(img: DynamicImage, quality: u8) -> Result<Vec<u8>, anyhow::Error> {
+    Ok(match img {
+        DynamicImage::ImageRgb8(img) => {
+            let rgb = img.as_flat_samples();
+            encode_avif_rgb8(img.width(), img.height(), rgb.as_slice(), quality)?
+        }
+        DynamicImage::ImageRgba8(img) => {
+            let rgb = img.as_flat_samples();
+            encode_avif_rgb8(img.width(), img.height(), rgb.as_slice(), quality)?
+        }
+        DynamicImage::ImageLuma8(img) => {
+            let rgb = img.as_flat_samples();
+            encode_avif_rgb8(img.width(), img.height(), rgb.as_slice(), quality)?
+        }
+        _ => return Err(libavif::Error::UnsupportedImageType)?,
+    })
+}
+
+fn encode_avif_rgb8(
+    width: u32,
+    height: u32,
+    rgb: &[u8],
+    quality: u8,
+) -> Result<Vec<u8>, anyhow::Error> {
+    let image = if (width * height) as usize == rgb.len() {
+        libavif::AvifImage::from_luma8(width, height, rgb)?
+    } else {
+        let rgb = libavif::RgbPixels::new(width, height, rgb)?;
+        rgb.to_image(libavif::YuvFormat::Yuv444)
+    };
+    Ok(libavif::Encoder::new()
+        .set_quality(quality)
+        .encode(&image)?
+        .to_vec())
 }
 
 fn encode_jpeg(img: DynamicImage, quality: u8) -> Result<Vec<u8>, anyhow::Error> {
