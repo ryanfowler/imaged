@@ -1,5 +1,5 @@
 [package]
-name = "imagetest"
+name = "imaged"
 version = "0.1.0"
 edition = "2021"
 
@@ -14,13 +14,14 @@ strip = true
 anyhow = "*"
 axum = { version = "*", features = ["query"] }
 bytes = "*"
-image = "*"
+image = { version = "*", default-features = false, features = ["png", "tiff"] }
 jemallocator = { version = "*" }
 kamadak-exif = "*"
+libavif-image = "*"
 mime = "*"
 reqwest = "*"
 serde = { version = "*", features = ["derive"] }
 serde_json = "*"
-tokio = { version = "*", features = ["rt", "net", "macros"] }
+tokio = { version = "*", features = ["rt", "net", "macros", "sync"] }
 turbojpeg = { version = "*", features = ["image"] }
 webp = "*"

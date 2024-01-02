@@ -1,23 +1,31 @@
-use std::fmt::Display;
+use std::{fmt::Display, sync::Arc};
 
 use anyhow::anyhow;
 use image::{
+    codecs::{png::PngEncoder, tiff::TiffEncoder},
     error::{ImageFormatHint, UnsupportedError, UnsupportedErrorKind},
     DynamicImage, GenericImageView, ImageError, ImageFormat, ImageResult,
 };
+use serde::{Deserialize, Serialize};
+use tokio::sync::Semaphore;
 
-#[derive(Clone, Copy, Debug)]
-enum ImageType {
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+pub enum ImageType {
+    #[serde(rename = "avif")]
+    Avif,
+    #[serde(rename = "jpeg")]
     Jpeg,
+    #[serde(rename = "png")]
+    Png,
+    #[serde(rename = "tiff")]
+    Tiff,
+    #[serde(rename = "webp")]
     Webp,
 }
 
 impl Display for ImageType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            ImageType::Jpeg => "jpeg",
-            ImageType::Webp => "webp",
-        })
+        f.write_str(self.as_str())
     }
 }
 
@@ -38,51 +46,86 @@ impl ImageType {
         }
     }
 
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ImageType::Avif => "avif",
+            ImageType::Jpeg => "jpeg",
+            ImageType::Png => "png",
+            ImageType::Tiff => "tiff",
+            ImageType::Webp => "webp",
+        }
+    }
+
     fn from_raw(b: &[u8]) -> ImageResult<Self> {
         Self::from_image_format(image::guess_format(b)?)
     }
 
     fn to_image_format(&self) -> ImageFormat {
         match self {
+            ImageType::Avif => ImageFormat::Avif,
             ImageType::Jpeg => ImageFormat::Jpeg,
+            ImageType::Png => ImageFormat::Png,
+            ImageType::Tiff => ImageFormat::Tiff,
             ImageType::Webp => ImageFormat::WebP,
         }
     }
 
-    fn mimetype(&self) -> &'static str {
+    pub fn mimetype(&self) -> &'static str {
         match self {
+            ImageType::Avif => "image/avif",
             ImageType::Jpeg => "image/jpeg",
+            ImageType::Png => "image/png",
+            ImageType::Tiff => "image/tiff",
             ImageType::Webp => "image/webp",
         }
     }
 }
 
 #[derive(Clone, Copy, Debug)]
-struct ProcessOptions {
-    width: Option<u32>,
-    height: Option<u32>,
-    out_type: ImageType,
-    quality: u8,
+pub struct ProcessOptions {
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+    pub out_type: Option<ImageType>,
+    pub quality: Option<u8>,
 }
 
 #[derive(Clone, Debug)]
-struct ImageOutput {
-    buf: Vec<u8>,
-    img_type: ImageType,
-    width: u32,
-    height: u32,
-    orig_type: ImageType,
-    orig_width: u32,
-    orig_height: u32,
+pub struct ImageOutput {
+    pub buf: Vec<u8>,
+    pub img_type: ImageType,
+    pub width: u32,
+    pub height: u32,
+    pub orig_type: ImageType,
+    pub orig_width: u32,
+    pub orig_height: u32,
 }
 
-pub async fn process_image(b: bytes::Bytes, ops: ProcessOptions) -> Result<(), anyhow::Error> {
-    tokio::task::spawn_blocking(move || process_image_inner(b, ops))
-        .await
-        .unwrap()
+#[derive(Clone, Debug)]
+pub struct ImageProccessor {
+    semaphore: Arc<Semaphore>,
 }
 
-fn process_image_inner<T: AsRef<[u8]>>(b: T, ops: ProcessOptions) -> Result<(), anyhow::Error> {
+impl ImageProccessor {
+    pub fn new(num_workers: usize) -> Self {
+        ImageProccessor {
+            semaphore: Arc::new(Semaphore::new(num_workers)),
+        }
+    }
+
+    pub async fn process_image(
+        &self,
+        b: bytes::Bytes,
+        ops: ProcessOptions,
+    ) -> Result<ImageOutput, anyhow::Error> {
+        let _permit = self.semaphore.acquire().await?;
+        tokio::task::spawn_blocking(move || process_image_inner(b, ops)).await?
+    }
+}
+
+fn process_image_inner<T: AsRef<[u8]>>(
+    b: T,
+    ops: ProcessOptions,
+) -> Result<ImageOutput, anyhow::Error> {
     let body = b.as_ref();
     let img_type = ImageType::from_raw(body)?;
 
@@ -90,20 +133,54 @@ fn process_image_inner<T: AsRef<[u8]>>(b: T, ops: ProcessOptions) -> Result<(), 
     let (orig_width, orig_height) = img.dimensions();
 
     let out_img = resize(&img, &ops);
+    let (width, height) = out_img.dimensions();
 
-    Ok(())
+    let out_type = ops.out_type.unwrap_or(img_type);
+    let quality = ops.quality.unwrap_or(75);
+    let buf = encode_image(out_img, out_type, quality)?;
+
+    Ok(ImageOutput {
+        buf,
+        img_type: out_type,
+        width,
+        height,
+        orig_type: img_type,
+        orig_width,
+        orig_height,
+    })
 }
 
 fn decode_image(img_type: ImageType, raw: &[u8]) -> Result<DynamicImage, anyhow::Error> {
     match img_type {
+        ImageType::Avif => decode_avif(raw),
         ImageType::Jpeg => decode_jpeg(raw),
+        ImageType::Png => decode_png(raw),
+        ImageType::Tiff => decode_tiff(raw),
         ImageType::Webp => decode_webp(raw),
     }
+}
+
+fn decode_avif(raw: &[u8]) -> Result<DynamicImage, anyhow::Error> {
+    Ok(libavif_image::read(raw)?)
 }
 
 fn decode_jpeg(raw: &[u8]) -> Result<DynamicImage, anyhow::Error> {
     let img: image::RgbImage = turbojpeg::decompress_image(raw)?;
     Ok(image::DynamicImage::from(img))
+}
+
+fn decode_png(raw: &[u8]) -> Result<DynamicImage, anyhow::Error> {
+    Ok(image::load_from_memory_with_format(
+        raw,
+        ImageType::Png.to_image_format(),
+    )?)
+}
+
+fn decode_tiff(raw: &[u8]) -> Result<DynamicImage, anyhow::Error> {
+    Ok(image::load_from_memory_with_format(
+        raw,
+        ImageType::Tiff.to_image_format(),
+    )?)
 }
 
 fn decode_webp(raw: &[u8]) -> Result<DynamicImage, anyhow::Error> {
@@ -120,6 +197,7 @@ fn resize(img: &DynamicImage, ops: &ProcessOptions) -> DynamicImage {
 
 fn get_img_dims(img: &DynamicImage, ops: &ProcessOptions) -> (u32, u32) {
     if let (Some(width), Some(height)) = (ops.width, ops.height) {
+        // TODO(rfowler): Crop image if necessary.
         return (width, height);
     }
 
@@ -148,9 +226,17 @@ fn encode_image(
     quality: u8,
 ) -> Result<Vec<u8>, anyhow::Error> {
     match img_type {
+        ImageType::Avif => encode_avif(img, quality),
         ImageType::Jpeg => encode_jpeg(img, quality),
+        ImageType::Png => encode_png(img, quality),
+        ImageType::Tiff => encode_tiff(img, quality),
         ImageType::Webp => encode_webp(img, quality),
     }
+}
+
+fn encode_avif(img: DynamicImage, _quality: u8) -> Result<Vec<u8>, anyhow::Error> {
+    // TODO(rfowler): Use Encoder directly to set quality.
+    Ok(libavif_image::save(&img)?.to_owned())
 }
 
 fn encode_jpeg(img: DynamicImage, quality: u8) -> Result<Vec<u8>, anyhow::Error> {
@@ -166,6 +252,18 @@ fn encode_jpeg(img: DynamicImage, quality: u8) -> Result<Vec<u8>, anyhow::Error>
     }?
     .to_owned();
     Ok(out)
+}
+
+fn encode_png(img: DynamicImage, _quality: u8) -> Result<Vec<u8>, anyhow::Error> {
+    let mut out = Vec::with_capacity(1 << 15);
+    img.write_with_encoder(PngEncoder::new(&mut out))?;
+    Ok(out)
+}
+
+fn encode_tiff(img: DynamicImage, _quality: u8) -> Result<Vec<u8>, anyhow::Error> {
+    let mut out = std::io::Cursor::new(Vec::with_capacity(1 << 15));
+    img.write_with_encoder(TiffEncoder::new(&mut out))?;
+    Ok(out.into_inner())
 }
 
 fn encode_webp(img: DynamicImage, quality: u8) -> Result<Vec<u8>, anyhow::Error> {
