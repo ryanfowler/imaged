@@ -86,19 +86,21 @@ async fn get_image(
         dur: ms_since(start),
     });
 
-    let mut thdr = String::new();
-    for (i, timing) in timings.iter().enumerate() {
-        if i > 0 {
-            thdr.push_str(", ");
-        }
-        _ = write!(&mut thdr, "{};dur={:.1}", timing.name, timing.dur);
-    }
-
     let mut res = axum::response::Response::builder();
     res = res.header("content-type", output.img_type.mimetype());
-    res = res.header("server-timing", &thdr);
     res = res.header("x-image-width", output.width);
     res = res.header("x-image-height", output.height);
+
+    if query.is_timing() {
+        let mut thdr = String::new();
+        for (i, timing) in timings.iter().enumerate() {
+            if i > 0 {
+                thdr.push_str(",");
+            }
+            _ = write!(&mut thdr, "{};dur={:.1}", timing.name, timing.dur);
+        }
+        res = res.header("server-timing", &thdr);
+    }
 
     if query.is_debug() {
         let raw = serde_json::to_string(&ImageDebug {
@@ -140,6 +142,8 @@ struct ImageQuery {
     #[serde(default)]
     debug: Option<String>,
     #[serde(default)]
+    timing: Option<String>,
+    #[serde(default)]
     height: Option<u32>,
     #[serde(default)]
     width: Option<u32>,
@@ -147,10 +151,19 @@ struct ImageQuery {
 
 impl ImageQuery {
     fn is_debug(&self) -> bool {
-        if let Some(v) = &self.debug {
-            return v != "false";
+        Self::is_enabled(&self.debug)
+    }
+
+    fn is_timing(&self) -> bool {
+        Self::is_enabled(&self.timing)
+    }
+
+    fn is_enabled(v: &Option<String>) -> bool {
+        if let Some(v) = v {
+            v != "false"
+        } else {
+            false
         }
-        false
     }
 }
 
