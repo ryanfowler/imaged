@@ -19,7 +19,6 @@ jemallocator = { version = "*" }
 kamadak-exif = "*"
 libavif = "*"
 libavif-image = "*"
-mime = "*"
 reqwest = "*"
 serde = { version = "*", features = ["derive"] }
 serde_json = "*"

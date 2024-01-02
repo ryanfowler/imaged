@@ -9,6 +9,8 @@ use image::{
 use serde::{Deserialize, Serialize};
 use tokio::sync::Semaphore;
 
+use crate::exif;
+
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 pub enum ImageType {
     #[serde(rename = "avif")]
@@ -141,13 +143,17 @@ fn process_image_inner<T: AsRef<[u8]>>(
     let img_type = ImageType::from_raw(body)?;
 
     let img = decode_image(img_type, body)?;
+    let img = auto_orient(img, body);
     let (orig_width, orig_height) = img.dimensions();
 
     let out_img = resize(img, &ops);
     let (width, height) = out_img.dimensions();
 
     let out_type = ops.out_type.unwrap_or(img_type);
-    let quality = ops.quality.unwrap_or_else(|| out_type.default_quality());
+    let quality = ops
+        .quality
+        .map(|v| v.max(1).min(100))
+        .unwrap_or_else(|| out_type.default_quality());
     let buf = encode_image(out_img, out_type, quality)?;
 
     Ok(ImageOutput {
@@ -201,6 +207,24 @@ fn decode_webp(raw: &[u8]) -> Result<DynamicImage, anyhow::Error> {
         .map(|v| v.to_image())
 }
 
+fn auto_orient(img: DynamicImage, buf: &[u8]) -> DynamicImage {
+    if let Some(e) = exif::read_exif(buf) {
+        if let Some(orientation) = exif::get_orientation(&e) {
+            return match orientation {
+                2 => img.fliph(),
+                3 => img.rotate180(),
+                4 => img.flipv(),
+                5 => img.rotate90().fliph(),
+                6 => img.rotate90(),
+                7 => img.rotate270().fliph(),
+                8 => img.rotate270(),
+                _ => img,
+            };
+        }
+    }
+    img
+}
+
 fn resize(img: DynamicImage, ops: &ProcessOptions) -> DynamicImage {
     let (width, height, should_crop) = get_img_dims(&img, ops);
     if should_crop {
@@ -220,8 +244,8 @@ fn resize(img: DynamicImage, ops: &ProcessOptions) -> DynamicImage {
             y = ((orig_height - crop_height) as f32 / 2.0).round() as u32;
         }
 
-        let img = img.crop_imm(x, y, crop_width, crop_height);
-        img.thumbnail_exact(width, height)
+        img.crop_imm(x, y, crop_width, crop_height)
+            .thumbnail_exact(width, height)
     } else {
         img.thumbnail(width, height)
     }

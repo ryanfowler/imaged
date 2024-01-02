@@ -12,6 +12,7 @@ use axum::{
 use image::{ImageProccessor, ImageType, ProcessOptions};
 use reqwest::Client;
 
+mod exif;
 mod image;
 
 #[global_allocator]
