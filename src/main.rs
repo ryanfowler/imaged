@@ -35,7 +35,14 @@ async fn main() {
     const ADDR: &str = "0.0.0.0:8000";
     let listener = tokio::net::TcpListener::bind(ADDR).await.unwrap();
     println!("Starting server on {}", ADDR);
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await
+        .unwrap();
+}
+
+async fn shutdown_signal() {
+    tokio::signal::ctrl_c().await.unwrap()
 }
 
 async fn get_image(

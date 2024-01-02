@@ -23,6 +23,6 @@ mime = "*"
 reqwest = "*"
 serde = { version = "*", features = ["derive"] }
 serde_json = "*"
-tokio = { version = "*", features = ["rt", "net", "macros", "sync"] }
+tokio = { version = "*", features = ["rt", "net", "macros", "signal", "sync"] }
 turbojpeg = { version = "*", features = ["image"] }
 webp = "*"
