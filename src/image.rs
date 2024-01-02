@@ -143,7 +143,7 @@ fn process_image_inner<T: AsRef<[u8]>>(
     let img = decode_image(img_type, body)?;
     let (orig_width, orig_height) = img.dimensions();
 
-    let out_img = resize(&img, &ops);
+    let out_img = resize(img, &ops);
     let (width, height) = out_img.dimensions();
 
     let out_type = ops.out_type.unwrap_or(img_type);
@@ -201,34 +201,54 @@ fn decode_webp(raw: &[u8]) -> Result<DynamicImage, anyhow::Error> {
         .map(|v| v.to_image())
 }
 
-fn resize(img: &DynamicImage, ops: &ProcessOptions) -> DynamicImage {
-    let (width, height) = get_img_dims(img, ops);
-    img.thumbnail(width, height)
+fn resize(img: DynamicImage, ops: &ProcessOptions) -> DynamicImage {
+    let (width, height, should_crop) = get_img_dims(&img, ops);
+    if should_crop {
+        let (orig_width, orig_height) = img.dimensions();
+        let mut x = 0;
+        let mut y = 0;
+        let mut crop_width = orig_width;
+        let mut crop_height = orig_height;
+
+        let aspect_ratio = orig_width as f32 / orig_height as f32;
+        let crop_aspect_ratio = width as f32 / height as f32;
+        if aspect_ratio > crop_aspect_ratio {
+            crop_width = (crop_aspect_ratio * orig_height as f32).round() as u32;
+            x = ((orig_width - crop_width) as f32 / 2.0).round() as u32;
+        } else {
+            crop_height = (orig_width as f32 / crop_aspect_ratio).round() as u32;
+            y = ((orig_height - crop_height) as f32 / 2.0).round() as u32;
+        }
+
+        let img = img.crop_imm(x, y, crop_width, crop_height);
+        img.thumbnail_exact(width, height)
+    } else {
+        img.thumbnail(width, height)
+    }
 }
 
-fn get_img_dims(img: &DynamicImage, ops: &ProcessOptions) -> (u32, u32) {
+fn get_img_dims(img: &DynamicImage, ops: &ProcessOptions) -> (u32, u32, bool) {
     if let (Some(width), Some(height)) = (ops.width, ops.height) {
-        // TODO(rfowler): Crop image if necessary.
-        return (width, height);
+        return (width, height, true);
     }
 
     let (orig_width, orig_height) = img.dimensions();
 
     if let Some(width) = ops.width {
         if width >= orig_width {
-            return (orig_width, orig_height);
+            return (orig_width, orig_height, false);
         }
-        return (width, orig_height);
+        return (width, orig_height, false);
     }
 
     if let Some(height) = ops.height {
         if height >= orig_height {
-            return (orig_width, orig_height);
+            return (orig_width, orig_height, false);
         }
-        return (orig_width, height);
+        return (orig_width, height, false);
     }
 
-    (orig_width, orig_height)
+    (orig_width, orig_height, false)
 }
 
 fn encode_image(
@@ -277,6 +297,8 @@ fn encode_avif_rgb8(
     };
     Ok(libavif::Encoder::new()
         .set_quality(quality)
+        .set_alpha_quality(quality)
+        .set_speed(10)
         .encode(&image)?
         .to_vec())
 }
