@@ -117,6 +117,7 @@ pub struct ImageProccessor {
 
 impl ImageProccessor {
     pub fn new(num_workers: usize) -> Self {
+        let num_workers = num_workers.max(1);
         ImageProccessor {
             semaphore: Arc::new(Semaphore::new(num_workers)),
         }
