@@ -1,5 +1,6 @@
 use std::{
     fmt::Write,
+    sync::Arc,
     time::{Duration, SystemTime},
 };
 
@@ -9,7 +10,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
-use image::{ImageProccessor, ImageType, ProcessOptions};
+use image::{ImageProccessor, ImageType, InputImageType, ProcessOptions};
 use reqwest::Client;
 
 mod exif;
@@ -31,7 +32,7 @@ async fn main() {
 
     let app = axum::Router::new()
         .route("/", axum::routing::get(get_image))
-        .with_state((client, processor));
+        .with_state((client, Arc::new(processor)));
 
     const ADDR: &str = "0.0.0.0:8000";
     let listener = tokio::net::TcpListener::bind(ADDR).await.unwrap();
@@ -48,7 +49,7 @@ async fn shutdown_signal() {
 
 async fn get_image(
     Query(query): Query<ImageQuery>,
-    State((client, processor)): State<(Client, ImageProccessor)>,
+    State((client, processor)): State<(Client, Arc<ImageProccessor>)>,
 ) -> Response {
     let mut timings = Vec::new();
 
@@ -136,10 +137,8 @@ struct ImageQuery {
 
     #[serde(default)]
     quality: Option<u8>,
-
     #[serde(default)]
     format: Option<ImageType>,
-
     #[serde(default)]
     debug: Option<String>,
     #[serde(default)]
@@ -173,5 +172,5 @@ struct ImageDebug {
     original_height: u32,
     original_width: u32,
     original_size: u64,
-    original_format: ImageType,
+    original_format: InputImageType,
 }

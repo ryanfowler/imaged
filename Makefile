@@ -7,10 +7,8 @@ all:
 	@echo ""
 	@echo "commands:"
 	@echo "  build       - build the imaged docker container"
-	@echo "  lint        - run eslint in a docker container"
 	@echo "  start       - start the imaged service in a docker container"
 	@echo "  stop        - stop the running imaged docker container"
-	@echo "  test        - run integration tests in a docker container"
 
 .PHONY: build
 build:
