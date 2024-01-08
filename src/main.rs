@@ -4,6 +4,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+use anyhow::{anyhow, Result};
 use axum::{
     body::Body,
     extract::{Query, State},
@@ -55,23 +56,9 @@ async fn get_image(
     let mut timing = ServerTiming::new(query.is_timing());
 
     let start = SystemTime::now();
-    let body = match client.get(&query.url).send().await {
-        Err(err) => return (StatusCode::BAD_REQUEST, err.to_string()).into_response(),
-        Ok(res) => {
-            if res.status() != reqwest::StatusCode::OK {
-                return (
-                    StatusCode::BAD_REQUEST,
-                    format!("received status code: {}", res.status()),
-                )
-                    .into_response();
-            }
-            match res.bytes().await {
-                Err(err) => {
-                    return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response()
-                }
-                Ok(body) => body,
-            }
-        }
+    let body = match get_orig_image(client, &query.url).await {
+        Ok(body) => body,
+        Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
     };
     timing.push("download", start);
 
@@ -98,6 +85,15 @@ async fn get_image(
     }
 
     res.body(Body::from(output.buf)).unwrap()
+}
+
+async fn get_orig_image(client: Client, url: &str) -> Result<bytes::Bytes> {
+    let res = client.get(url).send().await?;
+    if res.status() != reqwest::StatusCode::OK {
+        return Err(anyhow!("received status code: {}", res.status()));
+    }
+
+    res.bytes().await.map_err(|err| err.into())
 }
 
 struct ServerTiming {
