@@ -22,23 +22,38 @@ pub enum InputImageType {
 }
 
 impl InputImageType {
-    fn from_image_format(fmt: ImageFormat) -> ImageResult<Self> {
-        match fmt {
-            ImageFormat::Avif => Ok(InputImageType::Avif),
-            ImageFormat::Jpeg => Ok(InputImageType::Jpeg),
-            ImageFormat::Png => Ok(InputImageType::Png),
-            ImageFormat::Tiff => Ok(InputImageType::Tiff),
-            ImageFormat::WebP => Ok(InputImageType::Webp),
-            _ => {
-                let hint = ImageFormatHint::Exact(fmt);
-                Err(ImageError::Unsupported(
-                    UnsupportedError::from_format_and_kind(
-                        hint.clone(),
-                        UnsupportedErrorKind::Format(hint),
-                    ),
-                ))
-            }
+    fn determine_image_type(buf: &[u8]) -> Option<Self> {
+        if buf.len() < 12 {
+            return None;
         }
+
+        const JPEG: &[u8; 3] = b"\xFF\xD8\xFF";
+        if buf.starts_with(JPEG) {
+            return Some(Self::Jpeg);
+        }
+
+        const PNG: &[u8; 4] = b"\x89\x50\x4E\x47";
+        if buf.starts_with(PNG) {
+            return Some(Self::Png);
+        }
+
+        const TIFFII: &[u8; 4] = b"\x49\x49\x2A\x00";
+        const TIFFMM: &[u8; 4] = b"\x4D\x4D\x00\x2A";
+        if buf.starts_with(TIFFII) || buf.starts_with(TIFFMM) {
+            return Some(Self::Tiff);
+        }
+
+        const WEBP: &[u8; 4] = b"\x57\x45\x42\x50";
+        if buf[8..].starts_with(WEBP) {
+            return Some(Self::Webp);
+        }
+
+        const AVIF: &[u8; 8] = b"ftypavif";
+        if buf[4..].starts_with(AVIF) {
+            return Some(Self::Avif);
+        }
+
+        None
     }
 }
 
@@ -171,7 +186,12 @@ fn process_image_inner(b: bytes::Bytes, ops: ProcessOptions) -> Result<ImageOutp
 }
 
 fn from_raw(b: &[u8]) -> ImageResult<InputImageType> {
-    image::guess_format(b).and_then(|res| InputImageType::from_image_format(res))
+    InputImageType::determine_image_type(b).ok_or_else(|| {
+        ImageError::Unsupported(UnsupportedError::from_format_and_kind(
+            ImageFormatHint::Unknown,
+            UnsupportedErrorKind::Format(ImageFormatHint::Unknown),
+        ))
+    })
 }
 
 fn decode_image(img_type: InputImageType, raw: &[u8]) -> Result<DynamicImage> {

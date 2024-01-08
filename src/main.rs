@@ -57,12 +57,21 @@ async fn get_image(
     let start = SystemTime::now();
     let body = match client.get(&query.url).send().await {
         Err(err) => return (StatusCode::BAD_REQUEST, err.to_string()).into_response(),
-        Ok(res) => match res.bytes().await {
-            Err(err) => {
-                return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response()
+        Ok(res) => {
+            if res.status() != reqwest::StatusCode::OK {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    format!("received status code: {}", res.status()),
+                )
+                    .into_response();
             }
-            Ok(body) => body,
-        },
+            match res.bytes().await {
+                Err(err) => {
+                    return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response()
+                }
+                Ok(body) => body,
+            }
+        }
     };
     timing.push("download", start);
 
