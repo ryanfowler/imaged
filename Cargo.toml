@@ -14,10 +14,9 @@ strip = true
 anyhow = "*"
 axum = { version = "*", features = ["query"] }
 bytes = "*"
-image = { version = "*", default-features = false, features = ["png", "tiff"] }
+image = { version = "*", default-features = false, features = ["avif-encoder", "png", "tiff"] }
 jemallocator = { version = "*" }
 kamadak-exif = "*"
-libavif = "*"
 libavif-image = "*"
 reqwest = "*"
 serde = { version = "*", features = ["derive"] }

@@ -2,7 +2,7 @@ use std::{fmt::Display, sync::Arc};
 
 use anyhow::{anyhow, Result};
 use image::{
-    codecs::{png::PngEncoder, tiff::TiffEncoder},
+    codecs::{avif::AvifEncoder, png::PngEncoder, tiff::TiffEncoder},
     error::{ImageFormatHint, UnsupportedError, UnsupportedErrorKind},
     DynamicImage, GenericImageView, ImageError, ImageFormat, ImageResult,
 };
@@ -287,36 +287,10 @@ fn encode_image(img: DynamicImage, img_type: ImageType, quality: u8) -> Result<V
 }
 
 fn encode_avif(img: DynamicImage, quality: u8) -> Result<Vec<u8>> {
-    Ok(match img {
-        DynamicImage::ImageRgb8(img) => {
-            let rgb = img.as_flat_samples();
-            encode_avif_rgb8(img.width(), img.height(), rgb.as_slice(), quality)?
-        }
-        DynamicImage::ImageRgba8(img) => {
-            let rgb = img.as_flat_samples();
-            encode_avif_rgb8(img.width(), img.height(), rgb.as_slice(), quality)?
-        }
-        DynamicImage::ImageLuma8(img) => {
-            let rgb = img.as_flat_samples();
-            encode_avif_rgb8(img.width(), img.height(), rgb.as_slice(), quality)?
-        }
-        _ => Err(libavif::Error::UnsupportedImageType)?,
-    })
-}
-
-fn encode_avif_rgb8(width: u32, height: u32, rgb: &[u8], quality: u8) -> Result<Vec<u8>> {
-    let image = if (width * height) as usize == rgb.len() {
-        libavif::AvifImage::from_luma8(width, height, rgb)?
-    } else {
-        let rgb = libavif::RgbPixels::new(width, height, rgb)?;
-        rgb.to_image(libavif::YuvFormat::Yuv444)
-    };
-    Ok(libavif::Encoder::new()
-        .set_quality(quality)
-        .set_alpha_quality(quality)
-        .set_speed(8)
-        .encode(&image)?
-        .to_vec())
+    let mut out = Vec::with_capacity(1 << 15);
+    let enc = AvifEncoder::new_with_speed_quality(&mut out, 8, quality);
+    img.write_with_encoder(enc)?;
+    Ok(out)
 }
 
 fn encode_jpeg(img: DynamicImage, quality: u8) -> Result<Vec<u8>> {
