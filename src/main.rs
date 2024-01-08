@@ -5,13 +5,14 @@ use std::{
 };
 
 use axum::{
+    body::Body,
     extract::{Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-
 use image::{ImageOutput, ImageProccessor, ImageType, InputImageType, ProcessOptions};
 use reqwest::Client;
+use tokio::{net::TcpListener, signal};
 
 mod exif;
 mod image;
@@ -35,7 +36,7 @@ async fn main() {
         .with_state((client, Arc::new(processor)));
 
     const ADDR: &str = "0.0.0.0:8000";
-    let listener = tokio::net::TcpListener::bind(ADDR).await.unwrap();
+    let listener = TcpListener::bind(ADDR).await.unwrap();
     println!("Starting server on {}", ADDR);
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
@@ -44,55 +45,42 @@ async fn main() {
 }
 
 async fn shutdown_signal() {
-    tokio::signal::ctrl_c().await.unwrap()
+    signal::ctrl_c().await.unwrap()
 }
 
 async fn get_image(
     Query(query): Query<ImageQuery>,
     State((client, processor)): State<(Client, Arc<ImageProccessor>)>,
 ) -> Response {
-    let mut timings = Vec::new();
+    let mut timing = ServerTiming::new(query.is_timing());
 
     let start = SystemTime::now();
     let body = match client.get(&query.url).send().await {
-        Err(_) => return (StatusCode::BAD_REQUEST).into_response(),
+        Err(err) => return (StatusCode::BAD_REQUEST, err.to_string()).into_response(),
         Ok(res) => match res.bytes().await {
-            Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR).into_response(),
+            Err(err) => {
+                return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response()
+            }
             Ok(body) => body,
         },
     };
-    timings.push(ServerTimingValue {
-        name: "download",
-        dur: ms_since(start),
-    });
+    timing.push("download", start);
 
     let start = SystemTime::now();
-    let output = match processor
-        .process_image(body, options_from_query(&query))
-        .await
-    {
+    let ops = options_from_query(&query);
+    let output = match processor.process_image(body, ops).await {
         Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
         Ok(output) => output,
     };
-    timings.push(ServerTimingValue {
-        name: "process",
-        dur: ms_since(start),
-    });
+    timing.push("process", start);
 
     let mut res = axum::response::Response::builder();
     res = res.header("content-type", output.img_type.mimetype());
     res = res.header("x-image-width", output.width);
     res = res.header("x-image-height", output.height);
 
-    if query.is_timing() {
-        let mut thdr = String::new();
-        for (i, timing) in timings.iter().enumerate() {
-            if i > 0 {
-                thdr.push_str(",");
-            }
-            _ = write!(&mut thdr, "{};dur={:.1}", timing.name, timing.dur);
-        }
-        res = res.header("server-timing", &thdr);
+    if timing.should_show() {
+        res = res.header("server-timing", &timing.header());
     }
 
     if query.is_debug() {
@@ -100,20 +88,49 @@ async fn get_image(
         res = res.header("x-image-debug", &raw);
     }
 
-    res.body(axum::body::Body::from(output.buf)).unwrap()
+    res.body(Body::from(output.buf)).unwrap()
 }
 
-struct ServerTimingValue {
-    name: &'static str,
-    dur: f32,
+struct ServerTiming {
+    hdr: Option<String>,
 }
 
-fn ms_since(start: std::time::SystemTime) -> f32 {
-    std::time::SystemTime::now()
-        .duration_since(start)
-        .unwrap()
-        .as_secs_f32()
-        * 1000.0
+impl ServerTiming {
+    fn new(show_timing: bool) -> Self {
+        Self {
+            hdr: if show_timing {
+                Some(String::new())
+            } else {
+                None
+            },
+        }
+    }
+
+    fn push(&mut self, name: &'static str, start: SystemTime) {
+        if let Some(ref mut hdr) = self.hdr {
+            if hdr.len() > 0 {
+                hdr.push(',')
+            }
+            let dur = Self::ms_since(start);
+            _ = write!(hdr, "{};dur={:.1}", name, dur);
+        }
+    }
+
+    fn should_show(&self) -> bool {
+        self.hdr.is_some()
+    }
+
+    fn header(mut self) -> String {
+        self.hdr.take().unwrap_or_else(|| String::new())
+    }
+
+    fn ms_since(start: SystemTime) -> f32 {
+        SystemTime::now()
+            .duration_since(start)
+            .unwrap()
+            .as_secs_f32()
+            * 1000.0
+    }
 }
 
 #[derive(serde::Deserialize)]
