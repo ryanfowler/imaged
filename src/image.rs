@@ -6,20 +6,15 @@ use image::{
     error::{ImageFormatHint, UnsupportedError, UnsupportedErrorKind},
     DynamicImage, GenericImageView, ImageError, ImageFormat, ImageResult,
 };
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Semaphore;
 
 use crate::exif;
 
-static HEIF: Lazy<Option<libheif_rs::LibHeif>> =
-    Lazy::new(|| libheif_rs::LibHeif::new_checked().ok());
-
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum InputImageType {
     Avif,
-    Heif,
     Jpeg,
     Png,
     Tiff,
@@ -61,7 +56,6 @@ impl From<InputImageType> for ImageType {
     fn from(value: InputImageType) -> Self {
         match value {
             InputImageType::Avif => Self::Avif,
-            InputImageType::Heif => Self::Jpeg,
             InputImageType::Jpeg => Self::Jpeg,
             InputImageType::Png => Self::Png,
             InputImageType::Tiff => Self::Tiff,
@@ -192,25 +186,12 @@ fn process_image_inner<T: AsRef<[u8]>>(
 }
 
 fn from_raw(b: &[u8]) -> ImageResult<InputImageType> {
-    image::guess_format(b)
-        .and_then(|res| InputImageType::from_image_format(res))
-        .or_else(|err| {
-            if let Some(ref _heif) = *HEIF {
-                if matches!(
-                    libheif_rs::check_file_type(b),
-                    libheif_rs::FileTypeResult::Supported
-                ) {
-                    return Ok(InputImageType::Heif);
-                }
-            }
-            Err(err)
-        })
+    image::guess_format(b).and_then(|res| InputImageType::from_image_format(res))
 }
 
 fn decode_image(img_type: InputImageType, raw: &[u8]) -> Result<DynamicImage, anyhow::Error> {
     match img_type {
         InputImageType::Avif => decode_avif(raw),
-        InputImageType::Heif => decode_heif(raw),
         InputImageType::Jpeg => decode_jpeg(raw),
         InputImageType::Png => decode_png(raw),
         InputImageType::Tiff => decode_tiff(raw),
@@ -220,36 +201,6 @@ fn decode_image(img_type: InputImageType, raw: &[u8]) -> Result<DynamicImage, an
 
 fn decode_avif(raw: &[u8]) -> Result<DynamicImage, anyhow::Error> {
     Ok(libavif_image::read(raw)?)
-}
-
-fn decode_heif(raw: &[u8]) -> Result<DynamicImage, anyhow::Error> {
-    if let Some(ref heif) = *HEIF {
-        decode_heif_image(&heif, raw)
-    } else {
-        Err(anyhow!("unable to decode heif image"))
-    }
-}
-
-fn decode_heif_image(
-    heif: &libheif_rs::LibHeif,
-    raw: &[u8],
-) -> Result<DynamicImage, anyhow::Error> {
-    let ctx = libheif_rs::HeifContext::read_from_bytes(raw)?;
-    // ctx.set_max_decoding_threads(0);
-    let handle = ctx.primary_image_handle()?;
-    let img = heif.decode(
-        &handle,
-        libheif_rs::ColorSpace::Rgb(libheif_rs::RgbChroma::Rgb),
-        None,
-    )?;
-    let planes = img.planes();
-    let i = planes
-        .interleaved
-        .ok_or_else(|| anyhow!("unable to decode heif image"))?;
-    image::RgbImage::from_raw(i.width, i.height, i.data.to_vec()).map_or_else(
-        || Err(anyhow!("unable to decode heif image")),
-        |img| Ok(DynamicImage::ImageRgb8(img)),
-    )
 }
 
 fn decode_jpeg(raw: &[u8]) -> Result<DynamicImage, anyhow::Error> {
