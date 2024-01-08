@@ -10,7 +10,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
-use image::{ImageProccessor, ImageType, InputImageType, ProcessOptions};
+use image::{ImageOutput, ImageProccessor, ImageType, InputImageType, ProcessOptions};
 use reqwest::Client;
 
 mod exif;
@@ -65,19 +65,10 @@ async fn get_image(
         name: "download",
         dur: ms_since(start),
     });
-    let orig_size = body.len();
 
     let start = SystemTime::now();
     let output = match processor
-        .process_image(
-            body,
-            ProcessOptions {
-                width: query.width,
-                height: query.height,
-                out_type: query.format,
-                quality: query.quality,
-            },
-        )
+        .process_image(body, options_from_query(&query))
         .await
     {
         Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
@@ -105,13 +96,7 @@ async fn get_image(
     }
 
     if query.is_debug() {
-        let raw = serde_json::to_string(&ImageDebug {
-            original_size: orig_size as u64,
-            original_width: output.orig_width,
-            original_height: output.orig_height,
-            original_format: output.orig_type,
-        })
-        .unwrap();
+        let raw = serde_json::to_string(&ImageDebug::new(&output)).unwrap();
         res = res.header("x-image-debug", &raw);
     }
 
@@ -173,4 +158,24 @@ struct ImageDebug {
     original_width: u32,
     original_size: u64,
     original_format: InputImageType,
+}
+
+impl ImageDebug {
+    fn new(output: &ImageOutput) -> Self {
+        ImageDebug {
+            original_height: output.orig_height,
+            original_width: output.orig_width,
+            original_size: output.orig_size,
+            original_format: output.orig_type,
+        }
+    }
+}
+
+fn options_from_query(query: &ImageQuery) -> ProcessOptions {
+    ProcessOptions {
+        width: query.width,
+        height: query.height,
+        out_type: query.format,
+        quality: query.quality,
+    }
 }

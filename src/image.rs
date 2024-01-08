@@ -1,6 +1,6 @@
 use std::{fmt::Display, sync::Arc};
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Result};
 use image::{
     codecs::{png::PngEncoder, tiff::TiffEncoder},
     error::{ImageFormatHint, UnsupportedError, UnsupportedErrorKind},
@@ -81,16 +81,6 @@ impl ImageType {
         }
     }
 
-    fn to_image_format(&self) -> ImageFormat {
-        match self {
-            ImageType::Avif => ImageFormat::Avif,
-            ImageType::Jpeg => ImageFormat::Jpeg,
-            ImageType::Png => ImageFormat::Png,
-            ImageType::Tiff => ImageFormat::Tiff,
-            ImageType::Webp => ImageFormat::WebP,
-        }
-    }
-
     pub fn mimetype(&self) -> &'static str {
         match self {
             ImageType::Avif => "image/avif",
@@ -126,6 +116,7 @@ pub struct ImageOutput {
     pub img_type: ImageType,
     pub width: u32,
     pub height: u32,
+    pub orig_size: u64,
     pub orig_type: InputImageType,
     pub orig_width: u32,
     pub orig_height: u32,
@@ -143,20 +134,13 @@ impl ImageProccessor {
         }
     }
 
-    pub async fn process_image(
-        &self,
-        b: bytes::Bytes,
-        ops: ProcessOptions,
-    ) -> Result<ImageOutput, anyhow::Error> {
+    pub async fn process_image(&self, b: bytes::Bytes, ops: ProcessOptions) -> Result<ImageOutput> {
         let _permit = self.semaphore.acquire().await?;
         tokio::task::spawn_blocking(move || process_image_inner(b, ops)).await?
     }
 }
 
-fn process_image_inner<T: AsRef<[u8]>>(
-    b: T,
-    ops: ProcessOptions,
-) -> Result<ImageOutput, anyhow::Error> {
+fn process_image_inner(b: bytes::Bytes, ops: ProcessOptions) -> Result<ImageOutput> {
     let body = b.as_ref();
     let img_type = from_raw(body)?;
 
@@ -179,6 +163,7 @@ fn process_image_inner<T: AsRef<[u8]>>(
         img_type: out_type,
         width,
         height,
+        orig_size: body.len() as u64,
         orig_type: img_type,
         orig_width,
         orig_height,
@@ -189,7 +174,7 @@ fn from_raw(b: &[u8]) -> ImageResult<InputImageType> {
     image::guess_format(b).and_then(|res| InputImageType::from_image_format(res))
 }
 
-fn decode_image(img_type: InputImageType, raw: &[u8]) -> Result<DynamicImage, anyhow::Error> {
+fn decode_image(img_type: InputImageType, raw: &[u8]) -> Result<DynamicImage> {
     match img_type {
         InputImageType::Avif => decode_avif(raw),
         InputImageType::Jpeg => decode_jpeg(raw),
@@ -199,30 +184,24 @@ fn decode_image(img_type: InputImageType, raw: &[u8]) -> Result<DynamicImage, an
     }
 }
 
-fn decode_avif(raw: &[u8]) -> Result<DynamicImage, anyhow::Error> {
+fn decode_avif(raw: &[u8]) -> Result<DynamicImage> {
     Ok(libavif_image::read(raw)?)
 }
 
-fn decode_jpeg(raw: &[u8]) -> Result<DynamicImage, anyhow::Error> {
+fn decode_jpeg(raw: &[u8]) -> Result<DynamicImage> {
     let img: image::RgbImage = turbojpeg::decompress_image(raw)?;
     Ok(image::DynamicImage::from(img))
 }
 
-fn decode_png(raw: &[u8]) -> Result<DynamicImage, anyhow::Error> {
-    Ok(image::load_from_memory_with_format(
-        raw,
-        ImageType::Png.to_image_format(),
-    )?)
+fn decode_png(raw: &[u8]) -> Result<DynamicImage> {
+    Ok(image::load_from_memory_with_format(raw, ImageFormat::Png)?)
 }
 
-fn decode_tiff(raw: &[u8]) -> Result<DynamicImage, anyhow::Error> {
-    Ok(image::load_from_memory_with_format(
-        raw,
-        ImageType::Tiff.to_image_format(),
-    )?)
+fn decode_tiff(raw: &[u8]) -> Result<DynamicImage> {
+    Ok(image::load_from_memory_with_format(raw, ImageFormat::Tiff)?)
 }
 
-fn decode_webp(raw: &[u8]) -> Result<DynamicImage, anyhow::Error> {
+fn decode_webp(raw: &[u8]) -> Result<DynamicImage> {
     webp::Decoder::new(raw)
         .decode()
         .ok_or_else(|| anyhow!("unable to decode image as webp"))
@@ -256,9 +235,9 @@ fn resize(img: DynamicImage, ops: &ProcessOptions) -> DynamicImage {
         let mut crop_width = orig_width;
         let mut crop_height = orig_height;
 
-        let aspect_ratio = orig_width as f32 / orig_height as f32;
+        let orig_aspect_ratio = orig_width as f32 / orig_height as f32;
         let crop_aspect_ratio = width as f32 / height as f32;
-        if aspect_ratio > crop_aspect_ratio {
+        if orig_aspect_ratio > crop_aspect_ratio {
             crop_width = (crop_aspect_ratio * orig_height as f32).round() as u32;
             x = ((orig_width - crop_width) as f32 / 2.0).round() as u32;
         } else {
@@ -297,11 +276,7 @@ fn get_img_dims(img: &DynamicImage, ops: &ProcessOptions) -> (u32, u32, bool) {
     (orig_width, orig_height, false)
 }
 
-fn encode_image(
-    img: DynamicImage,
-    img_type: ImageType,
-    quality: u8,
-) -> Result<Vec<u8>, anyhow::Error> {
+fn encode_image(img: DynamicImage, img_type: ImageType, quality: u8) -> Result<Vec<u8>> {
     match img_type {
         ImageType::Avif => encode_avif(img, quality),
         ImageType::Jpeg => encode_jpeg(img, quality),
@@ -311,7 +286,7 @@ fn encode_image(
     }
 }
 
-fn encode_avif(img: DynamicImage, quality: u8) -> Result<Vec<u8>, anyhow::Error> {
+fn encode_avif(img: DynamicImage, quality: u8) -> Result<Vec<u8>> {
     Ok(match img {
         DynamicImage::ImageRgb8(img) => {
             let rgb = img.as_flat_samples();
@@ -325,16 +300,11 @@ fn encode_avif(img: DynamicImage, quality: u8) -> Result<Vec<u8>, anyhow::Error>
             let rgb = img.as_flat_samples();
             encode_avif_rgb8(img.width(), img.height(), rgb.as_slice(), quality)?
         }
-        _ => return Err(libavif::Error::UnsupportedImageType)?,
+        _ => Err(libavif::Error::UnsupportedImageType)?,
     })
 }
 
-fn encode_avif_rgb8(
-    width: u32,
-    height: u32,
-    rgb: &[u8],
-    quality: u8,
-) -> Result<Vec<u8>, anyhow::Error> {
+fn encode_avif_rgb8(width: u32, height: u32, rgb: &[u8], quality: u8) -> Result<Vec<u8>> {
     let image = if (width * height) as usize == rgb.len() {
         libavif::AvifImage::from_luma8(width, height, rgb)?
     } else {
@@ -349,7 +319,7 @@ fn encode_avif_rgb8(
         .to_vec())
 }
 
-fn encode_jpeg(img: DynamicImage, quality: u8) -> Result<Vec<u8>, anyhow::Error> {
+fn encode_jpeg(img: DynamicImage, quality: u8) -> Result<Vec<u8>> {
     let quality = quality as i32;
     let out = match img {
         DynamicImage::ImageRgb8(img) => {
@@ -364,19 +334,19 @@ fn encode_jpeg(img: DynamicImage, quality: u8) -> Result<Vec<u8>, anyhow::Error>
     Ok(out)
 }
 
-fn encode_png(img: DynamicImage, _quality: u8) -> Result<Vec<u8>, anyhow::Error> {
+fn encode_png(img: DynamicImage, _quality: u8) -> Result<Vec<u8>> {
     let mut out = Vec::with_capacity(1 << 15);
     img.write_with_encoder(PngEncoder::new(&mut out))?;
     Ok(out)
 }
 
-fn encode_tiff(img: DynamicImage, _quality: u8) -> Result<Vec<u8>, anyhow::Error> {
+fn encode_tiff(img: DynamicImage, _quality: u8) -> Result<Vec<u8>> {
     let mut out = std::io::Cursor::new(Vec::with_capacity(1 << 15));
     img.write_with_encoder(TiffEncoder::new(&mut out))?;
     Ok(out.into_inner())
 }
 
-fn encode_webp(img: DynamicImage, quality: u8) -> Result<Vec<u8>, anyhow::Error> {
+fn encode_webp(img: DynamicImage, quality: u8) -> Result<Vec<u8>> {
     Ok(webp::Encoder::from_image(&img)
         .map_err(|_| anyhow!("unable to encode image as webp"))?
         .encode(quality as f32)
