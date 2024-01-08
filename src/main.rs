@@ -18,6 +18,8 @@ use tokio::{net::TcpListener, signal};
 mod exif;
 mod image;
 
+static NAME_VERSION: &str = concat!("imaged/", env!("CARGO_PKG_VERSION"));
+
 #[global_allocator]
 static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
@@ -72,8 +74,7 @@ async fn get_image(
 
     let mut res = axum::response::Response::builder();
     res = res.header("content-type", output.img_type.mimetype());
-    res = res.header("x-image-width", output.width);
-    res = res.header("x-image-height", output.height);
+    res = res.header("server", NAME_VERSION);
 
     if timing.should_show() {
         res = res.header("server-timing", &timing.header());
@@ -83,6 +84,9 @@ async fn get_image(
         let raw = serde_json::to_string(&ImageDebug::new(&output)).unwrap();
         res = res.header("x-image-debug", &raw);
     }
+
+    res = res.header("x-image-height", output.height);
+    res = res.header("x-image-width", output.width);
 
     res.body(Body::from(output.buf)).unwrap()
 }

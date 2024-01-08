@@ -157,7 +157,7 @@ impl ImageProccessor {
 
 fn process_image_inner(b: bytes::Bytes, ops: ProcessOptions) -> Result<ImageOutput> {
     let body = b.as_ref();
-    let img_type = from_raw(body)?;
+    let img_type = type_from_raw(body)?;
 
     let img = decode_image(img_type, body)?;
     let img = auto_orient(img, body);
@@ -185,7 +185,7 @@ fn process_image_inner(b: bytes::Bytes, ops: ProcessOptions) -> Result<ImageOutp
     })
 }
 
-fn from_raw(b: &[u8]) -> ImageResult<InputImageType> {
+fn type_from_raw(b: &[u8]) -> ImageResult<InputImageType> {
     InputImageType::determine_image_type(b).ok_or_else(|| {
         ImageError::Unsupported(UnsupportedError::from_format_and_kind(
             ImageFormatHint::Unknown,
@@ -205,7 +205,7 @@ fn decode_image(img_type: InputImageType, raw: &[u8]) -> Result<DynamicImage> {
 }
 
 fn decode_avif(raw: &[u8]) -> Result<DynamicImage> {
-    Ok(libavif_image::read(raw)?)
+    libavif_image::read(raw).map_err(|err| err.into())
 }
 
 fn decode_jpeg(raw: &[u8]) -> Result<DynamicImage> {
@@ -214,11 +214,11 @@ fn decode_jpeg(raw: &[u8]) -> Result<DynamicImage> {
 }
 
 fn decode_png(raw: &[u8]) -> Result<DynamicImage> {
-    Ok(image::load_from_memory_with_format(raw, ImageFormat::Png)?)
+    image::load_from_memory_with_format(raw, ImageFormat::Png).map_err(|err| err.into())
 }
 
 fn decode_tiff(raw: &[u8]) -> Result<DynamicImage> {
-    Ok(image::load_from_memory_with_format(raw, ImageFormat::Tiff)?)
+    image::load_from_memory_with_format(raw, ImageFormat::Tiff).map_err(|err| err.into())
 }
 
 fn decode_webp(raw: &[u8]) -> Result<DynamicImage> {
