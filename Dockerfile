@@ -1,16 +1,13 @@
-FROM node:20-bookworm AS builder
+# syntax = docker/dockerfile:1.3
+
+FROM rust:1.75-bookworm as builder
 WORKDIR /imaged
-COPY package.json package-lock.json ./
-RUN npm ci
 COPY . .
-RUN npm run build
+RUN apt-get update && apt-get install -y meson nasm cmake
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/imaged/target \
+    cargo build --locked --release && cp /imaged/target/release/imaged /bin/imaged
 
-FROM builder AS prefinal
-RUN npm prune --omit=dev
-
-FROM gcr.io/distroless/nodejs20-debian12
-WORKDIR /imaged
-COPY --from=prefinal /imaged/node_modules ./node_modules
-COPY --from=prefinal /imaged/dist ./dist
-COPY --from=prefinal /imaged/package.json .
-CMD ["dist/lib/app.js"]
+FROM gcr.io/distroless/cc-debian12:nonroot
+COPY --from=builder /bin/imaged /
+ENTRYPOINT ["/imaged"]

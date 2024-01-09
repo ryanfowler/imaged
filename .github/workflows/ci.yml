@@ -1,45 +1,37 @@
-name: Continuous Integration
-on: [push]
+name: ci
+
+on:
+  pull_request:
+    branches: ["main"]
+
+env:
+  RUST_VERSION: "1.75.0"
 
 jobs:
   build:
-    name: Build
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: [18.x, 20.x]
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
-    - name: Setup NodeJS ${{ matrix.node-version }}
-      uses: actions/setup-node@v1
-      with:
-        node-version: ${{ matrix.node-version }}
-    - uses: actions/cache@v2
-      with:
-        path: ~/.npm
-        key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-        restore-keys: |
-          ${{ runner.os }}-node-
-    - name: Install dependencies
-      run: npm install
-    - name: Build
-      run: npm run build
-    - name: Lint
-      run: npm run lint
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
 
-  build-docker:
-    name: Build Docker
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
-    - name: Build
-      run: make build
-    - name: Lint
-      run: make lint
-    - name: Test
-      run: |
-        make start
-        make test
-        make stop
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          components: clippy, rustfmt
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y meson nasm cmake
+
+      - name: Rust cargo format
+        run: cargo fmt --all -- --check
+
+      - name: Rust cargo clippy
+        run: cargo clippy -- -D warnings
+
+      - name: Rust cargo test
+        run: cargo test --locked
+
+      - name: Rust cargo build
+        run: cargo build --locked
