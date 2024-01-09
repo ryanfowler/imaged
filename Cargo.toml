@@ -1,6 +1,10 @@
 [package]
 name = "imaged"
 version = "0.1.0"
+description = "Image processing server"
+authors = ["Ryan Fowler <ryan.fowler19@gmail.com>"]
+repository = "https://github.com/ryanfowler/imaged"
+license = "MIT"
 edition = "2021"
 
 [profile.release]
