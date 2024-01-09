@@ -59,7 +59,7 @@ jobs:
       - name: Install cross
         if: ${{ matrix.os == 'ubuntu-22.04' }}
         run: |
-          cargo install --git https://github.com/cross-rs/cross
+          cargo install --git https://github.com/cross-rs/cross cross
           echo CARGO=cross >> $GITHUB_ENV
 
       - name: Install homebrew dependencies
