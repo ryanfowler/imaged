@@ -26,7 +26,6 @@ jobs:
           - linux-x86_64-musl
           - macos-arm64
           - macos-x86_64
-          - windows-x86_64-msvc
         include:
           - build: freebsd-x86_64
             os: ubuntu-22.04
@@ -49,9 +48,6 @@ jobs:
           - build: macos-arm64
             os: macos-12
             target: aarch64-apple-darwin
-          - build: windows-x86_64-msvc
-            os: windows-2022
-            target: x86_64-pc-windows-msvc
     steps:
       - uses: actions/checkout@v3
 
@@ -67,26 +63,22 @@ jobs:
           cargo install cross@${{ env.CROSS_VERSION }}
           echo CARGO=cross >> $GITHUB_ENV
 
+      - name: Install homebrew dependencies
+        if: ${{ matrix.os == 'macos-12' }}
+        run: |
+          NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          brew install cmake meson nasm
+
       - name: Rust cargo build
         run: ${{ env.CARGO }} build --release --locked --target ${{ matrix.target }}
 
       - name: Build archive
-        if: ${{ matrix.os != 'windows-2022' }}
         shell: bash
         run: |
           staging="imaged-${{ github.ref_name }}-${{ matrix.target }}"
           cp "target/${{ matrix.target }}/release/imaged" imaged
           tar czf "$staging.tar.gz" imaged
           echo "ASSET=$staging.tar.gz" >> $GITHUB_ENV
-
-      - name: Build archive
-        if: ${{ matrix.os == 'windows-2022' }}
-        shell: bash
-        run: |
-          staging="imaged-${{ github.ref_name }}-${{ matrix.target }}"
-          cp "target/${{ matrix.target }}/release/imaged.exe" imaged.exe
-          7z a "$staging.zip" imaged.exe
-          echo "ASSET=$staging.zip" >> $GITHUB_ENV
 
       - name: Upload release archive
         env:
