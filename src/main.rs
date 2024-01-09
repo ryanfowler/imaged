@@ -117,7 +117,7 @@ impl ServerTiming {
 
     fn push(&mut self, name: &'static str, start: SystemTime) {
         if let Some(ref mut hdr) = self.hdr {
-            if hdr.len() > 0 {
+            if !hdr.is_empty() {
                 hdr.push(',')
             }
             let dur = Self::ms_since(start);
@@ -130,7 +130,7 @@ impl ServerTiming {
     }
 
     fn header(mut self) -> String {
-        self.hdr.take().unwrap_or_else(|| String::new())
+        self.hdr.take().unwrap_or_default()
     }
 
     fn ms_since(start: SystemTime) -> f32 {
