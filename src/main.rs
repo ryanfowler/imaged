@@ -115,7 +115,7 @@ impl ServerTiming {
         }
     }
 
-    fn push(&mut self, name: &'static str, start: SystemTime) {
+    fn push(&mut self, name: &str, start: SystemTime) {
         if let Some(ref mut hdr) = self.hdr {
             if !hdr.is_empty() {
                 hdr.push(',')
