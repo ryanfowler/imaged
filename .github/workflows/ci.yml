@@ -21,6 +21,9 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
           components: clippy, rustfmt
 
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y meson nasm cmake
+
       - name: Rust cargo format
         run: cargo fmt --all -- --check
 
