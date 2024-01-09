@@ -5,7 +5,6 @@ on:
     types: [published]
 
 env:
-  CROSS_VERSION: "0.2.5"
   RUST_VERSION: "1.75.0"
 
 jobs:
@@ -60,7 +59,7 @@ jobs:
       - name: Install cross
         if: ${{ matrix.os == 'ubuntu-22.04' }}
         run: |
-          cargo install cross@${{ env.CROSS_VERSION }}
+          cargo install --git https://github.com/cross-rs/cross
           echo CARGO=cross >> $GITHUB_ENV
 
       - name: Install homebrew dependencies
