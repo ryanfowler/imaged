@@ -158,6 +158,8 @@ pub struct ImageMetadata {
     pub size: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thumbhash: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<exif::Data>,
 }
 
 pub struct ImageProccessor {
@@ -185,10 +187,11 @@ impl ImageProccessor {
 
 fn process_image_inner(b: bytes::Bytes, ops: ProcessOptions) -> Result<ImageOutput> {
     let body = b.as_ref();
+    let data = exif::ExifData::new(body);
     let img_type = type_from_raw(body)?;
 
     let img = decode_image(img_type, body)?;
-    let img = auto_orient(img, body);
+    let img = auto_orient(&data, img);
     let (orig_width, orig_height) = img.dimensions();
 
     let mut out_img = resize(img, ops.width, ops.height);
@@ -261,9 +264,9 @@ fn decode_webp(raw: &[u8]) -> Result<DynamicImage> {
         .map(|v| v.to_image())
 }
 
-fn auto_orient(img: DynamicImage, buf: &[u8]) -> DynamicImage {
-    if let Some(e) = exif::read_exif(buf) {
-        if let Some(orientation) = exif::get_orientation(&e) {
+fn auto_orient(data: &Option<exif::ExifData>, img: DynamicImage) -> DynamicImage {
+    if let Some(data) = data {
+        if let Some(orientation) = data.get_orientation() {
             return match orientation {
                 2 => img.fliph(),
                 3 => img.rotate180(),
@@ -382,8 +385,9 @@ fn encode_webp(img: DynamicImage, quality: u8) -> Result<Vec<u8>> {
 
 fn metadata_inner(buf: bytes::Bytes, ops: MetadataOptions) -> Result<ImageMetadata> {
     let format = type_from_raw(&buf)?;
+    let exif_data = exif::ExifData::new(&buf);
     let img = decode_image(format, &buf)?;
-    let img = auto_orient(img, &buf);
+    let img = auto_orient(&exif_data, img);
     let (width, height) = img.dimensions();
     let hash = if ops.thumbhash {
         Some(get_thumbhash(img))
@@ -397,6 +401,7 @@ fn metadata_inner(buf: bytes::Bytes, ops: MetadataOptions) -> Result<ImageMetada
         height,
         size: buf.len() as u64,
         thumbhash: hash,
+        data: exif_data.map(|exif_data| exif_data.get_data()),
     })
 }
 
