@@ -133,7 +133,12 @@ async fn get_image_metadata(
         res = res.header("server-timing", &timing.header());
     }
 
-    let out = serde_json::to_vec(&output).unwrap();
+    let out = if query.is_pretty() {
+        serde_json::to_vec_pretty(&output)
+    } else {
+        serde_json::to_vec(&output)
+    }
+    .unwrap();
     res.body(Body::from(out)).unwrap()
 }
 
@@ -222,12 +227,18 @@ struct MetadataQuery {
     url: String,
 
     #[serde(default)]
+    pretty: Option<String>,
+    #[serde(default)]
     thumbhash: Option<String>,
     #[serde(default)]
     timing: Option<String>,
 }
 
 impl MetadataQuery {
+    fn is_pretty(&self) -> bool {
+        Self::is_enabled(&self.pretty)
+    }
+
     fn is_timing(&self) -> bool {
         Self::is_enabled(&self.timing)
     }
