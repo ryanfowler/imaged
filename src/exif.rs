@@ -1,19 +1,114 @@
 use std::io::Cursor;
 
-use exif::{Exif, In, Reader, Tag};
+use exif::{Exif, In, Reader, Tag, Value};
+use serde::Serialize;
 
-pub fn read_exif(buf: &[u8]) -> Option<Exif> {
-    let mut cursor = Cursor::new(buf);
-    Reader::new().read_from_container(&mut cursor).ok()
+#[derive(Clone, Debug, Serialize)]
+pub struct Data {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    make: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    software: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    orientation: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    f_number: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    iso: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    exposure_time: Option<String>,
 }
 
-pub fn get_orientation(e: &Exif) -> Option<u32> {
-    if let Some(field) = e.get_field(Tag::Orientation, In::PRIMARY) {
-        if let Some(orientation) = field.value.get_uint(0) {
-            return Some(orientation);
+pub struct ExifData {
+    exif: Exif,
+}
+
+impl ExifData {
+    pub fn new(buf: &[u8]) -> Option<Self> {
+        let mut cursor = Cursor::new(buf);
+        Reader::new()
+            .read_from_container(&mut cursor)
+            .ok()
+            .map(|exif| Self { exif })
+    }
+
+    pub fn get_data(&self) -> Data {
+        Data {
+            make: self.get_make(),
+            model: self.get_model(),
+            software: self.get_software(),
+            orientation: self.get_orientation(),
+            f_number: self.get_f_number(),
+            iso: self.get_iso(),
+            exposure_time: self.get_exposure_time(),
         }
     }
-    None
+
+    pub fn get_orientation(&self) -> Option<u32> {
+        self.get_field_u32(Tag::Orientation)
+    }
+
+    fn get_make(&self) -> Option<String> {
+        self.get_field_string(Tag::Make)
+    }
+
+    fn get_model(&self) -> Option<String> {
+        self.get_field_string(Tag::Model)
+    }
+
+    fn get_software(&self) -> Option<String> {
+        self.get_field_string(Tag::Software)
+    }
+
+    fn get_f_number(&self) -> Option<f32> {
+        self.get_field_rational(Tag::FNumber)
+            .map(|(num, denom)| num as f32 / denom as f32)
+    }
+
+    fn _get_aperture(&self) -> Option<f32> {
+        self.get_field_rational(Tag::ApertureValue)
+            .map(|(num, denom)| num as f32 / denom as f32)
+            .map(|v| (2_f32.powf(v).sqrt() * 10.0).round() / 10.0)
+    }
+
+    fn get_iso(&self) -> Option<u32> {
+        self.get_field_u32(Tag::PhotographicSensitivity)
+    }
+
+    fn get_exposure_time(&self) -> Option<String> {
+        self.get_field_rational(Tag::ExposureTime)
+            .map(|(num, denom)| format!("{}/{}", num, denom))
+    }
+
+    fn get_field_string(&self, tag: Tag) -> Option<String> {
+        if let Some(field) = self.exif.get_field(tag, In::PRIMARY) {
+            if let Value::Ascii(v) = &field.value {
+                if !v.is_empty() {
+                    return std::str::from_utf8(&v[0]).ok().map(|v| v.to_string());
+                }
+            }
+        }
+        None
+    }
+
+    fn get_field_rational(&self, tag: Tag) -> Option<(u32, u32)> {
+        self.exif.get_field(tag, In::PRIMARY).and_then(|field| {
+            if let Value::Rational(v) = &field.value {
+                if !v.is_empty() {
+                    return Some((v[0].num, v[0].denom));
+                }
+            }
+            None
+        })
+    }
+
+    fn get_field_u32(&self, tag: Tag) -> Option<u32> {
+        self.exif
+            .get_field(tag, In::PRIMARY)
+            .and_then(|field| field.value.get_uint(0))
+    }
 }
 
 // #[derive(Clone, Debug, Default)]
