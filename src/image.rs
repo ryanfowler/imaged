@@ -1,6 +1,7 @@
 use std::{fmt::Display, sync::Arc};
 
 use anyhow::{anyhow, Result};
+use base64::{engine::general_purpose::STANDARD, Engine as _};
 use image::{
     codecs::{avif::AvifEncoder, png::PngEncoder, tiff::TiffEncoder},
     error::{ImageFormatHint, UnsupportedError, UnsupportedErrorKind},
@@ -138,6 +139,27 @@ pub struct ImageOutput {
     pub orig_height: u32,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct MetadataOptions {
+    pub thumbhash: bool,
+}
+
+impl MetadataOptions {
+    pub fn new(thumbhash: bool) -> Self {
+        MetadataOptions { thumbhash }
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct ImageMetadata {
+    pub format: InputImageType,
+    pub width: u32,
+    pub height: u32,
+    pub size: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thumbhash: Option<String>,
+}
+
 pub struct ImageProccessor {
     semaphore: Arc<Semaphore>,
 }
@@ -154,6 +176,11 @@ impl ImageProccessor {
         let _permit = self.semaphore.acquire().await?;
         tokio::task::spawn_blocking(move || process_image_inner(b, ops)).await?
     }
+
+    pub async fn metadata(&self, b: bytes::Bytes, ops: MetadataOptions) -> Result<ImageMetadata> {
+        let _permit = self.semaphore.acquire().await?;
+        tokio::task::spawn_blocking(move || metadata_inner(b, ops)).await?
+    }
 }
 
 fn process_image_inner(b: bytes::Bytes, ops: ProcessOptions) -> Result<ImageOutput> {
@@ -164,7 +191,7 @@ fn process_image_inner(b: bytes::Bytes, ops: ProcessOptions) -> Result<ImageOutp
     let img = auto_orient(img, body);
     let (orig_width, orig_height) = img.dimensions();
 
-    let mut out_img = resize(img, &ops);
+    let mut out_img = resize(img, ops.width, ops.height);
     let (width, height) = out_img.dimensions();
 
     if let Some(blur) = ops.blur {
@@ -252,8 +279,8 @@ fn auto_orient(img: DynamicImage, buf: &[u8]) -> DynamicImage {
     img
 }
 
-fn resize(img: DynamicImage, ops: &ProcessOptions) -> DynamicImage {
-    let (width, height, should_crop) = get_img_dims(&img, ops);
+fn resize(img: DynamicImage, width: Option<u32>, height: Option<u32>) -> DynamicImage {
+    let (width, height, should_crop) = get_img_dims(&img, width, height);
     if should_crop {
         let (orig_width, orig_height) = img.dimensions();
         let mut x = 0;
@@ -278,21 +305,21 @@ fn resize(img: DynamicImage, ops: &ProcessOptions) -> DynamicImage {
     }
 }
 
-fn get_img_dims(img: &DynamicImage, ops: &ProcessOptions) -> (u32, u32, bool) {
-    if let (Some(width), Some(height)) = (ops.width, ops.height) {
+fn get_img_dims(img: &DynamicImage, width: Option<u32>, height: Option<u32>) -> (u32, u32, bool) {
+    if let (Some(width), Some(height)) = (width, height) {
         return (width, height, true);
     }
 
     let (orig_width, orig_height) = img.dimensions();
 
-    if let Some(width) = ops.width {
+    if let Some(width) = width {
         if width >= orig_width {
             return (orig_width, orig_height, false);
         }
         return (width, orig_height, false);
     }
 
-    if let Some(height) = ops.height {
+    if let Some(height) = height {
         if height >= orig_height {
             return (orig_width, orig_height, false);
         }
@@ -351,4 +378,35 @@ fn encode_webp(img: DynamicImage, quality: u8) -> Result<Vec<u8>> {
         .map_err(|_| anyhow!("unable to encode image as webp"))?
         .encode(quality as f32)
         .to_owned())
+}
+
+fn metadata_inner(buf: bytes::Bytes, ops: MetadataOptions) -> Result<ImageMetadata> {
+    let format = type_from_raw(&buf)?;
+    let img = decode_image(format, &buf)?;
+    let img = auto_orient(img, &buf);
+    let (width, height) = img.dimensions();
+    let hash = if ops.thumbhash {
+        Some(get_thumbhash(img))
+    } else {
+        None
+    };
+
+    Ok(ImageMetadata {
+        format,
+        width,
+        height,
+        size: buf.len() as u64,
+        thumbhash: hash,
+    })
+}
+
+fn get_thumbhash(mut img: DynamicImage) -> String {
+    let (width, height) = img.dimensions();
+    if width > 100 || height > 100 {
+        img = img.thumbnail(100, 100);
+    }
+    let (width, height) = img.dimensions();
+    let rgba = img.to_rgba8().into_raw();
+    let hash = thumbhash::rgba_to_thumb_hash(width as usize, height as usize, &rgba);
+    STANDARD.encode(hash)
 }
