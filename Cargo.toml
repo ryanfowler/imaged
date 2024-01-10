@@ -17,6 +17,7 @@ strip = true
 [dependencies]
 anyhow = "1.0.79"
 axum = { version = "0.7.3", features = ["query"] }
+base64 = "0.21.6"
 bytes = "1.5.0"
 image = { version = "0.24.7", default-features = false, features = ["avif-encoder", "png", "tiff"] }
 jemallocator = { version = "0.5.4" }
@@ -25,6 +26,7 @@ libavif-image = "0.11.0"
 reqwest = "0.11.23"
 serde = { version = "1.0.195", features = ["derive"] }
 serde_json = "1.0.111"
+thumbhash = "0.1.0"
 tokio = { version = "1.35.1", features = ["rt", "net", "macros", "signal", "sync"] }
 turbojpeg = { version = "0.5.4", features = ["image"] }
 webp = "0.2.6"

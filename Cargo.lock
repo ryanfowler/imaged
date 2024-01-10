@@ -693,6 +693,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "base64",
  "bytes",
  "image",
  "jemallocator",
@@ -701,6 +702,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "thumbhash",
  "tokio",
  "turbojpeg",
  "webp",
@@ -1725,6 +1727,12 @@ dependencies = [
  "quote",
  "syn 2.0.48",
 ]
+
+[[package]]
+name = "thumbhash"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b7726e0245a7331bd0c9a1fb4fd99fd695bcd478ca569f0eda2ff2cb14e7a00"
 
 [[package]]
 name = "tiff"

@@ -11,8 +11,11 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use image::{ImageOutput, ImageProccessor, ImageType, InputImageType, ProcessOptions};
+use image::{
+    ImageOutput, ImageProccessor, ImageType, InputImageType, MetadataOptions, ProcessOptions,
+};
 use reqwest::Client;
+use serde::Deserialize;
 use tokio::{net::TcpListener, signal};
 
 mod exif;
@@ -36,6 +39,7 @@ async fn main() {
 
     let app = axum::Router::new()
         .route("/", axum::routing::get(get_image))
+        .route("/metadata", axum::routing::get(get_image_metadata))
         .with_state((client, Arc::new(processor)));
 
     const ADDR: &str = "0.0.0.0:8000";
@@ -98,6 +102,39 @@ async fn get_orig_image(client: Client, url: &str) -> Result<bytes::Bytes> {
     }
 
     res.bytes().await.map_err(|err| err.into())
+}
+
+async fn get_image_metadata(
+    Query(query): Query<MetadataQuery>,
+    State((client, processor)): State<(Client, Arc<ImageProccessor>)>,
+) -> Response {
+    let mut timing = ServerTiming::new(query.is_timing());
+
+    let start = SystemTime::now();
+    let body = match get_orig_image(client, &query.url).await {
+        Ok(body) => body,
+        Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
+    };
+    timing.push("download", start);
+
+    let start = SystemTime::now();
+    let ops = MetadataOptions::new(query.is_thumbhash());
+    let output = match processor.metadata(body, ops).await {
+        Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
+        Ok(output) => output,
+    };
+    timing.push("process", start);
+
+    let mut res = axum::response::Response::builder();
+    res = res.header("content-type", "application/json");
+    res = res.header("server", NAME_VERSION);
+
+    if timing.should_show() {
+        res = res.header("server-timing", &timing.header());
+    }
+
+    let out = serde_json::to_vec(&output).unwrap();
+    res.body(Body::from(out)).unwrap()
 }
 
 struct ServerTiming {
@@ -169,6 +206,34 @@ impl ImageQuery {
 
     fn is_timing(&self) -> bool {
         Self::is_enabled(&self.timing)
+    }
+
+    fn is_enabled(v: &Option<String>) -> bool {
+        if let Some(v) = v {
+            v != "false"
+        } else {
+            false
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct MetadataQuery {
+    url: String,
+
+    #[serde(default)]
+    thumbhash: Option<String>,
+    #[serde(default)]
+    timing: Option<String>,
+}
+
+impl MetadataQuery {
+    fn is_timing(&self) -> bool {
+        Self::is_enabled(&self.timing)
+    }
+
+    fn is_thumbhash(&self) -> bool {
+        Self::is_enabled(&self.thumbhash)
     }
 
     fn is_enabled(v: &Option<String>) -> bool {
