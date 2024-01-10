@@ -123,6 +123,7 @@ pub struct ProcessOptions {
     pub height: Option<u32>,
     pub out_type: Option<ImageType>,
     pub quality: Option<u8>,
+    pub blur: Option<u8>,
 }
 
 #[derive(Clone, Debug)]
@@ -163,8 +164,13 @@ fn process_image_inner(b: bytes::Bytes, ops: ProcessOptions) -> Result<ImageOutp
     let img = auto_orient(img, body);
     let (orig_width, orig_height) = img.dimensions();
 
-    let out_img = resize(img, &ops);
+    let mut out_img = resize(img, &ops);
     let (width, height) = out_img.dimensions();
+
+    if let Some(blur) = ops.blur {
+        let sigma = blur.min(100) as f32;
+        out_img = out_img.blur(sigma);
+    }
 
     let out_type = ops.out_type.unwrap_or_else(|| img_type.into());
     let quality = ops
