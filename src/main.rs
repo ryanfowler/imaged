@@ -158,6 +158,8 @@ struct ImageQuery {
     height: Option<u32>,
     #[serde(default)]
     width: Option<u32>,
+    #[serde(default)]
+    blur: Option<u8>,
 }
 
 impl ImageQuery {
@@ -203,5 +205,6 @@ fn options_from_query(query: &ImageQuery) -> ProcessOptions {
         height: query.height,
         out_type: query.format,
         quality: query.quality,
+        blur: query.blur,
     }
 }
