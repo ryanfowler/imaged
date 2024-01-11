@@ -97,6 +97,17 @@ impl ImageType {
         }
     }
 
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "avif" => Some(Self::Avif),
+            "jpeg" => Some(Self::Jpeg),
+            "png" => Some(Self::Png),
+            "tiff" => Some(Self::Tiff),
+            "webp" => Some(Self::Webp),
+            _ => None,
+        }
+    }
+
     pub fn mimetype(&self) -> &'static str {
         match self {
             ImageType::Avif => "image/avif",
@@ -107,7 +118,7 @@ impl ImageType {
         }
     }
 
-    fn default_quality(&self) -> u8 {
+    fn default_quality(&self) -> u32 {
         match self {
             ImageType::Avif => 50,
             ImageType::Jpeg => 75,
@@ -123,8 +134,8 @@ pub struct ProcessOptions {
     pub width: Option<u32>,
     pub height: Option<u32>,
     pub out_type: Option<ImageType>,
-    pub quality: Option<u8>,
-    pub blur: Option<u8>,
+    pub quality: Option<u32>,
+    pub blur: Option<u32>,
 }
 
 #[derive(Clone, Debug)]
@@ -332,7 +343,7 @@ fn get_img_dims(img: &DynamicImage, width: Option<u32>, height: Option<u32>) -> 
     (orig_width, orig_height, false)
 }
 
-fn encode_image(img: DynamicImage, img_type: ImageType, quality: u8) -> Result<Vec<u8>> {
+fn encode_image(img: DynamicImage, img_type: ImageType, quality: u32) -> Result<Vec<u8>> {
     match img_type {
         ImageType::Avif => encode_avif(img, quality),
         ImageType::Jpeg => encode_jpeg(img, quality),
@@ -342,14 +353,14 @@ fn encode_image(img: DynamicImage, img_type: ImageType, quality: u8) -> Result<V
     }
 }
 
-fn encode_avif(img: DynamicImage, quality: u8) -> Result<Vec<u8>> {
+fn encode_avif(img: DynamicImage, quality: u32) -> Result<Vec<u8>> {
     let mut out = Vec::with_capacity(1 << 15);
-    let enc = AvifEncoder::new_with_speed_quality(&mut out, 8, quality);
+    let enc = AvifEncoder::new_with_speed_quality(&mut out, 8, quality as u8);
     img.write_with_encoder(enc)?;
     Ok(out)
 }
 
-fn encode_jpeg(img: DynamicImage, quality: u8) -> Result<Vec<u8>> {
+fn encode_jpeg(img: DynamicImage, quality: u32) -> Result<Vec<u8>> {
     let quality = quality as i32;
     let out = match img {
         DynamicImage::ImageRgb8(img) => {
@@ -364,19 +375,19 @@ fn encode_jpeg(img: DynamicImage, quality: u8) -> Result<Vec<u8>> {
     Ok(out)
 }
 
-fn encode_png(img: DynamicImage, _quality: u8) -> Result<Vec<u8>> {
+fn encode_png(img: DynamicImage, _quality: u32) -> Result<Vec<u8>> {
     let mut out = Vec::with_capacity(1 << 15);
     img.write_with_encoder(PngEncoder::new(&mut out))?;
     Ok(out)
 }
 
-fn encode_tiff(img: DynamicImage, _quality: u8) -> Result<Vec<u8>> {
+fn encode_tiff(img: DynamicImage, _quality: u32) -> Result<Vec<u8>> {
     let mut out = std::io::Cursor::new(Vec::with_capacity(1 << 15));
     img.write_with_encoder(TiffEncoder::new(&mut out))?;
     Ok(out.into_inner())
 }
 
-fn encode_webp(img: DynamicImage, quality: u8) -> Result<Vec<u8>> {
+fn encode_webp(img: DynamicImage, quality: u32) -> Result<Vec<u8>> {
     Ok(webp::Encoder::from_image(&img)
         .map_err(|_| anyhow!("unable to encode image as webp"))?
         .encode(quality as f32)

@@ -699,6 +699,7 @@ dependencies = [
  "jemallocator",
  "kamadak-exif",
  "libavif-image",
+ "memchr",
  "reqwest",
  "serde",
  "serde_json",
