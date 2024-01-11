@@ -8,14 +8,14 @@ use anyhow::{anyhow, Result};
 use axum::{
     body::Body,
     extract::{Query, State},
-    http::StatusCode,
+    http::{HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
 };
 use image::{
     ImageOutput, ImageProccessor, ImageType, InputImageType, MetadataOptions, ProcessOptions,
 };
 use reqwest::Client;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tokio::{net::TcpListener, signal};
 
 mod exif;
@@ -56,6 +56,7 @@ async fn shutdown_signal() {
 }
 
 async fn get_image(
+    headers: HeaderMap,
     Query(query): Query<ImageQuery>,
     State((client, processor)): State<(Client, Arc<ImageProccessor>)>,
 ) -> Response {
@@ -69,7 +70,7 @@ async fn get_image(
     timing.push("download", start);
 
     let start = SystemTime::now();
-    let ops = options_from_query(&query);
+    let ops = options_from_query(&query, &headers);
     let output = match processor.process_image(body, ops).await {
         Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
         Ok(output) => output,
@@ -184,14 +185,14 @@ impl ServerTiming {
     }
 }
 
-#[derive(serde::Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 struct ImageQuery {
     url: String,
 
     #[serde(default)]
-    quality: Option<u8>,
+    quality: Option<u32>,
     #[serde(default)]
-    format: Option<ImageType>,
+    format: Option<ImageFormats>,
     #[serde(default)]
     debug: Option<String>,
     #[serde(default)]
@@ -201,7 +202,7 @@ struct ImageQuery {
     #[serde(default)]
     width: Option<u32>,
     #[serde(default)]
-    blur: Option<u8>,
+    blur: Option<u32>,
 }
 
 impl ImageQuery {
@@ -218,6 +219,34 @@ impl ImageQuery {
             v != "false"
         } else {
             false
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(untagged)]
+enum ImageFormats {
+    Format(ImageType),
+    CommaSep(String),
+}
+
+impl ImageFormats {
+    fn format(&self, accept: Option<&HeaderValue>) -> Option<ImageType> {
+        match self {
+            ImageFormats::Format(fmt) => Some(*fmt),
+            ImageFormats::CommaSep(v) => {
+                let fmts: Vec<ImageType> = v.split(',').filter_map(ImageType::parse).collect();
+                fmts.iter()
+                    .find(|&v| {
+                        accept
+                            .and_then(|accept| {
+                                memchr::memmem::find(accept.as_bytes(), v.mimetype().as_bytes())
+                            })
+                            .is_some()
+                    })
+                    .or_else(|| fmts.iter().last())
+                    .copied()
+            }
         }
     }
 }
@@ -256,7 +285,7 @@ impl MetadataQuery {
     }
 }
 
-#[derive(serde::Serialize)]
+#[derive(Serialize)]
 struct ImageDebug {
     original_height: u32,
     original_width: u32,
@@ -275,11 +304,12 @@ impl ImageDebug {
     }
 }
 
-fn options_from_query(query: &ImageQuery) -> ProcessOptions {
+fn options_from_query(query: &ImageQuery, headers: &HeaderMap) -> ProcessOptions {
+    let accept = headers.get("accept");
     ProcessOptions {
         width: query.width,
         height: query.height,
-        out_type: query.format,
+        out_type: query.format.as_ref().and_then(|v| v.format(accept)),
         quality: query.quality,
         blur: query.blur,
     }
