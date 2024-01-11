@@ -234,19 +234,23 @@ impl ImageFormats {
     fn format(&self, accept: Option<&HeaderValue>) -> Option<ImageType> {
         match self {
             ImageFormats::Format(fmt) => Some(*fmt),
-            ImageFormats::CommaSep(v) => {
-                let fmts: Vec<ImageType> = v.split(',').filter_map(ImageType::parse).collect();
-                fmts.iter()
-                    .find(|&v| {
-                        accept
-                            .and_then(|accept| {
-                                memchr::memmem::find(accept.as_bytes(), v.mimetype().as_bytes())
-                            })
-                            .is_some()
-                    })
-                    .or_else(|| fmts.iter().last())
-                    .copied()
-            }
+            ImageFormats::CommaSep(v) => v
+                .split(',')
+                .filter_map(ImageType::parse)
+                .collect::<Vec<ImageType>>()
+                .split_last()
+                .map(|(last, fmts)| {
+                    fmts.iter()
+                        .find(|&v| {
+                            accept
+                                .and_then(|accept| {
+                                    memchr::memmem::find(accept.as_bytes(), v.mimetype().as_bytes())
+                                })
+                                .is_some()
+                        })
+                        .unwrap_or(last)
+                        .to_owned()
+                }),
         }
     }
 }
