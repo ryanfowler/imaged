@@ -23,6 +23,7 @@ image = { version = "0.24.7", default-features = false, features = ["avif-encode
 jemallocator = { version = "0.5.4" }
 kamadak-exif = "0.5.5"
 libavif-image = { version = "0.11.0", default-features = false, features = ["codec-dav1d"] }
+lru = "0.12.1"
 memchr = "2.7.1"
 reqwest = "0.11.23"
 serde = { version = "1.0.195", features = ["derive"] }
