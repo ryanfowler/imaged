@@ -58,7 +58,7 @@ impl InputImageType {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ImageType {
     Avif,
@@ -129,7 +129,7 @@ impl ImageType {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct ProcessOptions {
     pub width: Option<u32>,
     pub height: Option<u32>,
@@ -140,7 +140,7 @@ pub struct ProcessOptions {
 
 #[derive(Clone, Debug)]
 pub struct ImageOutput {
-    pub buf: Vec<u8>,
+    pub buf: bytes::Bytes,
     pub img_type: ImageType,
     pub width: u32,
     pub height: u32,
@@ -221,7 +221,7 @@ fn process_image_inner(b: bytes::Bytes, ops: ProcessOptions) -> Result<ImageOutp
     let buf = encode_image(out_img, out_type, quality)?;
 
     Ok(ImageOutput {
-        buf,
+        buf: bytes::Bytes::from(buf),
         img_type: out_type,
         width,
         height,

@@ -1,28 +1,22 @@
-use std::{
-    fmt::Write,
-    sync::Arc,
-    time::{Duration, SystemTime},
-};
+use std::{sync::Arc, time::Duration};
 
-use anyhow::{anyhow, Result};
 use axum::{
     body::Body,
     extract::{Query, State},
-    http::{HeaderMap, HeaderValue, StatusCode},
+    http::{response::Builder, HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
     routing,
 };
-use image::{
-    ImageOutput, ImageProccessor, ImageType, InputImageType, MetadataOptions, ProcessOptions,
-};
-use reqwest::Client;
+use image::{ImageOutput, ImageProccessor, ImageType, InputImageType, ProcessOptions};
 use serde::{Deserialize, Serialize};
 use tokio::{
     net::TcpListener,
     signal::unix::{signal, SignalKind},
 };
 
+mod cache;
 mod exif;
+mod handler;
 mod image;
 
 static NAME_VERSION: &str = concat!("imaged/", env!("CARGO_PKG_VERSION"));
@@ -30,8 +24,12 @@ static NAME_VERSION: &str = concat!("imaged/", env!("CARGO_PKG_VERSION"));
 #[global_allocator]
 static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
+type Handler = Arc<handler::Handler>;
+
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
+    let cache = cache::Cache::new(1 << 22);
+
     let client = reqwest::Client::builder()
         .user_agent("imaged")
         .timeout(Duration::from_secs(60))
@@ -41,10 +39,16 @@ async fn main() {
     let workers = std::thread::available_parallelism().unwrap().get();
     let processor = ImageProccessor::new(workers);
 
+    let state: Handler = Arc::new(handler::Handler {
+        cache,
+        client,
+        processor,
+    });
+
     let app = axum::Router::new()
         .route("/", routing::get(get_image))
         .route("/metadata", routing::get(get_image_metadata))
-        .with_state((client, Arc::new(processor)));
+        .with_state(state);
 
     let port = std::env::var("PORT").unwrap_or_else(|_| "8000".to_string());
     let addr = format!("0.0.0.0:{}", port);
@@ -70,131 +74,61 @@ async fn shutdown_signal() {
 async fn get_image(
     headers: HeaderMap,
     Query(query): Query<ImageQuery>,
-    State((client, processor)): State<(Client, Arc<ImageProccessor>)>,
+    State(state): State<Handler>,
 ) -> Response {
-    let mut timing = ServerTiming::new(query.is_timing());
-
-    let start = SystemTime::now();
-    let body = match get_orig_image(client, &query.url).await {
-        Ok(body) => body,
+    let options = options_from_query(&query, &headers);
+    let timing = query.is_timing();
+    let result = match state.get_image(&query.url, options, timing).await {
+        Ok(res) => res,
         Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
     };
-    timing.push("download", start);
 
-    let start = SystemTime::now();
-    let ops = options_from_query(&query, &headers);
-    let output = match processor.process_image(body, ops).await {
-        Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
-        Ok(output) => output,
-    };
-    timing.push("process", start);
+    let mut res = new_response().header("content-type", result.output.img_type.mimetype());
 
-    let mut res = axum::response::Response::builder();
-    res = res.header("content-type", output.img_type.mimetype());
-    res = res.header("server", NAME_VERSION);
-
-    if timing.should_show() {
-        res = res.header("server-timing", &timing.header());
+    if result.timing.should_show() {
+        res = res.header("server-timing", &result.timing.header());
     }
 
     if query.is_debug() {
-        let raw = serde_json::to_string(&ImageDebug::new(&output)).unwrap();
+        let raw = serde_json::to_string(&ImageDebug::new(&result.output)).unwrap();
         res = res.header("x-image-debug", &raw);
     }
 
-    res = res.header("x-image-height", output.height);
-    res = res.header("x-image-width", output.width);
-
-    res.body(Body::from(output.buf)).unwrap()
-}
-
-async fn get_orig_image(client: Client, url: &str) -> Result<bytes::Bytes> {
-    let res = client.get(url).send().await?;
-    if res.status() != reqwest::StatusCode::OK {
-        return Err(anyhow!("received status code: {}", res.status()));
-    }
-
-    res.bytes().await.map_err(|err| err.into())
+    res.header("x-cache-status", result.cache_result.as_str())
+        .header("x-image-height", result.output.height)
+        .header("x-image-width", result.output.width)
+        .body(Body::from(result.output.buf))
+        .unwrap()
 }
 
 async fn get_image_metadata(
     Query(query): Query<MetadataQuery>,
-    State((client, processor)): State<(Client, Arc<ImageProccessor>)>,
+    State(state): State<Handler>,
 ) -> Response {
-    let mut timing = ServerTiming::new(query.is_timing());
-
-    let start = SystemTime::now();
-    let body = match get_orig_image(client, &query.url).await {
-        Ok(body) => body,
+    let timing = query.is_timing();
+    let thumbhash = query.is_thumbhash();
+    let result = match state.get_metadata(&query.url, thumbhash, timing).await {
+        Ok(res) => res,
         Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
     };
-    timing.push("download", start);
 
-    let start = SystemTime::now();
-    let ops = MetadataOptions::new(query.is_thumbhash());
-    let output = match processor.metadata(body, ops).await {
-        Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
-        Ok(output) => output,
-    };
-    timing.push("process", start);
+    let mut res = new_response().header("content-type", "application/json");
 
-    let mut res = axum::response::Response::builder();
-    res = res.header("content-type", "application/json");
-    res = res.header("server", NAME_VERSION);
-
-    if timing.should_show() {
-        res = res.header("server-timing", &timing.header());
+    if result.timing.should_show() {
+        res = res.header("server-timing", &result.timing.header());
     }
 
     let out = if query.is_pretty() {
-        serde_json::to_vec_pretty(&output)
+        serde_json::to_vec_pretty(&result.metadata)
     } else {
-        serde_json::to_vec(&output)
+        serde_json::to_vec(&result.metadata)
     }
     .unwrap();
     res.body(Body::from(out)).unwrap()
 }
 
-struct ServerTiming {
-    hdr: Option<String>,
-}
-
-impl ServerTiming {
-    fn new(show_timing: bool) -> Self {
-        Self {
-            hdr: if show_timing {
-                Some(String::new())
-            } else {
-                None
-            },
-        }
-    }
-
-    fn push(&mut self, name: &str, start: SystemTime) {
-        if let Some(ref mut hdr) = self.hdr {
-            if !hdr.is_empty() {
-                hdr.push(',')
-            }
-            let dur = Self::ms_since(start);
-            _ = write!(hdr, "{};dur={:.1}", name, dur);
-        }
-    }
-
-    fn should_show(&self) -> bool {
-        self.hdr.is_some()
-    }
-
-    fn header(mut self) -> String {
-        self.hdr.take().unwrap_or_default()
-    }
-
-    fn ms_since(start: SystemTime) -> f32 {
-        SystemTime::now()
-            .duration_since(start)
-            .unwrap()
-            .as_secs_f32()
-            * 1000.0
-    }
+fn new_response() -> Builder {
+    Response::builder().header("server", NAME_VERSION)
 }
 
 #[derive(Clone, Debug, Deserialize)]
