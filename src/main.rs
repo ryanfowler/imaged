@@ -10,6 +10,7 @@ use axum::{
     extract::{Query, State},
     http::{HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
+    routing,
 };
 use image::{
     ImageOutput, ImageProccessor, ImageType, InputImageType, MetadataOptions, ProcessOptions,
@@ -41,13 +42,14 @@ async fn main() {
     let processor = ImageProccessor::new(workers);
 
     let app = axum::Router::new()
-        .route("/", axum::routing::get(get_image))
-        .route("/metadata", axum::routing::get(get_image_metadata))
+        .route("/", routing::get(get_image))
+        .route("/metadata", routing::get(get_image_metadata))
         .with_state((client, Arc::new(processor)));
 
-    const ADDR: &str = "0.0.0.0:8000";
-    let listener = TcpListener::bind(ADDR).await.unwrap();
-    println!("Starting server on {}", ADDR);
+    let port = std::env::var("PORT").unwrap_or_else(|_| "8000".to_string());
+    let addr = format!("0.0.0.0:{}", port);
+    let listener = TcpListener::bind(&addr).await.unwrap();
+    println!("Starting server on {}", &addr);
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await
