@@ -16,7 +16,10 @@ use image::{
 };
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use tokio::{net::TcpListener, signal};
+use tokio::{
+    net::TcpListener,
+    signal::unix::{signal, SignalKind},
+};
 
 mod exif;
 mod image;
@@ -52,7 +55,14 @@ async fn main() {
 }
 
 async fn shutdown_signal() {
-    signal::ctrl_c().await.unwrap()
+    let mut sigterm = signal(SignalKind::terminate()).unwrap();
+    let mut sighup = signal(SignalKind::hangup()).unwrap();
+    let mut sigint = signal(SignalKind::interrupt()).unwrap();
+    tokio::select! {
+        _ = sigterm.recv() => {}
+        _ = sighup.recv() => {}
+        _ = sigint.recv() => {}
+    }
 }
 
 async fn get_image(
