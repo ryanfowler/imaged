@@ -30,10 +30,16 @@ type Handler = Arc<handler::Handler>;
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     let port = std::env::var("PORT").ok();
-    let cache_size = std::env::var("CACHE_SIZE").ok();
+    let cache_size_mb = std::env::var("CACHE_SIZE_MB")
+        .ok()
+        .map(|v| v.parse::<usize>().expect("invalid value for CACHE_SIZE_MB"));
 
-    let cache = cache_size
-        .map(|v| v.parse().expect("invalid value for CACHE_SIZE"))
+    if let Some(size) = cache_size_mb {
+        println!("Using an in-memory cache of size {}MB", size);
+    }
+
+    let cache = cache_size_mb
+        .map(|v| v * 1_048_576)
         .map(|v| cache::Cache::new(v));
 
     let client = reqwest::Client::builder()
@@ -83,9 +89,14 @@ async fn get_image(
     Query(query): Query<ImageQuery>,
     State(state): State<Handler>,
 ) -> Response {
-    let options = options_from_query(&query, &headers);
-    let timing = query.is_timing();
-    let result = state.get_image(&query.url, options, timing).await;
+    let result = state
+        .get_image(
+            &query.url,
+            options_from_query(&query, &headers),
+            query.is_timing(),
+            !query.is_nocache(),
+        )
+        .await;
     let result = match result.deref() {
         Ok(res) => res,
         Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
@@ -157,6 +168,8 @@ struct ImageQuery {
     width: Option<u32>,
     #[serde(default)]
     blur: Option<u32>,
+    #[serde(default)]
+    nocache: Option<String>,
 }
 
 impl ImageQuery {
@@ -166,6 +179,10 @@ impl ImageQuery {
 
     fn is_timing(&self) -> bool {
         Self::is_enabled(&self.timing)
+    }
+
+    fn is_nocache(&self) -> bool {
+        Self::is_enabled(&self.nocache)
     }
 
     fn is_enabled(v: &Option<String>) -> bool {

@@ -36,13 +36,16 @@ impl Handler {
         url: &str,
         options: ProcessOptions,
         timing: bool,
+        should_cache: bool,
     ) -> Arc<Result<ImageResponse>> {
         let key = Key {
             input: url.to_owned(),
             options,
         };
         self.group
-            .run(&key, || self.get_image_singleflight(url, options, timing))
+            .run(&key, || {
+                self.get_image_singleflight(url, options, timing, should_cache)
+            })
             .await
     }
 
@@ -51,8 +54,12 @@ impl Handler {
         url: &str,
         options: ProcessOptions,
         timing: bool,
+        should_cache: bool,
     ) -> Arc<Result<ImageResponse>> {
-        Arc::new(self.get_image_inner(url, options, timing).await)
+        Arc::new(
+            self.get_image_inner(url, options, timing, should_cache)
+                .await,
+        )
     }
 
     async fn get_image_inner(
@@ -60,6 +67,7 @@ impl Handler {
         url: &str,
         options: ProcessOptions,
         timing: bool,
+        should_cache: bool,
     ) -> Result<ImageResponse> {
         let mut timing = ServerTiming::new(timing);
 
@@ -84,7 +92,7 @@ impl Handler {
         let output = self.processor.process_image(body, options).await?;
         timing.push("process", start);
 
-        if let Some(cache) = &self.cache {
+        if let (Some(cache), true) = (&self.cache, should_cache) {
             let start = SystemTime::now();
             cache.set(url.to_owned(), options, output.clone());
             timing.push("cache_put", start);
