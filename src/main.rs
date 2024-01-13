@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::{ops::Deref, sync::Arc, time::Duration};
 
 use axum::{
     body::Body,
@@ -18,6 +18,7 @@ mod cache;
 mod exif;
 mod handler;
 mod image;
+mod singleflight;
 
 static NAME_VERSION: &str = concat!("imaged/", env!("CARGO_PKG_VERSION"));
 
@@ -42,6 +43,7 @@ async fn main() {
     let state: Handler = Arc::new(handler::Handler {
         cache,
         client,
+        group: singleflight::Group::new(),
         processor,
     });
 
@@ -78,7 +80,8 @@ async fn get_image(
 ) -> Response {
     let options = options_from_query(&query, &headers);
     let timing = query.is_timing();
-    let result = match state.get_image(&query.url, options, timing).await {
+    let result = state.get_image(&query.url, options, timing).await;
+    let result = match result.deref() {
         Ok(res) => res,
         Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
     };
@@ -97,7 +100,7 @@ async fn get_image(
     res.header("x-cache-status", result.cache_result.as_str())
         .header("x-image-height", result.output.height)
         .header("x-image-width", result.output.width)
-        .body(Body::from(result.output.buf))
+        .body(Body::from(result.output.buf.clone()))
         .unwrap()
 }
 

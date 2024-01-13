@@ -1,4 +1,4 @@
-use std::{fmt::Write, time::SystemTime};
+use std::{fmt::Write, sync::Arc, time::SystemTime};
 
 use anyhow::{anyhow, Result};
 use reqwest::Client;
@@ -6,14 +6,17 @@ use reqwest::Client;
 use crate::{
     cache::Cache,
     image::{ImageMetadata, ImageOutput, ImageProccessor, MetadataOptions, ProcessOptions},
+    singleflight::Group,
 };
 
 pub struct Handler {
     pub cache: Cache,
     pub client: Client,
+    pub group: Group<Key, Arc<Result<ImageResponse>>>,
     pub processor: ImageProccessor,
 }
 
+#[derive(Clone)]
 pub struct ImageResponse {
     pub cache_result: CacheResult,
     pub output: ImageOutput,
@@ -27,6 +30,30 @@ pub struct MetadataResponse {
 
 impl Handler {
     pub async fn get_image(
+        &self,
+        url: &str,
+        options: ProcessOptions,
+        timing: bool,
+    ) -> Arc<Result<ImageResponse>> {
+        let key = Key {
+            input: url.to_owned(),
+            options,
+        };
+        self.group
+            .run(&key, || self.get_image_singleflight(url, options, timing))
+            .await
+    }
+
+    async fn get_image_singleflight(
+        &self,
+        url: &str,
+        options: ProcessOptions,
+        timing: bool,
+    ) -> Arc<Result<ImageResponse>> {
+        Arc::new(self.get_image_inner(url, options, timing).await)
+    }
+
+    async fn get_image_inner(
         &self,
         url: &str,
         options: ProcessOptions,
@@ -94,6 +121,7 @@ impl Handler {
     }
 }
 
+#[derive(Clone)]
 pub enum CacheResult {
     Hit,
     Miss,
@@ -108,6 +136,7 @@ impl CacheResult {
     }
 }
 
+#[derive(Clone)]
 pub struct ServerTiming {
     hdr: Option<String>,
 }
@@ -137,8 +166,12 @@ impl ServerTiming {
         self.hdr.is_some()
     }
 
-    pub fn header(mut self) -> String {
-        self.hdr.take().unwrap_or_default()
+    pub fn header(&self) -> String {
+        if let Some(v) = &self.hdr {
+            v.to_owned()
+        } else {
+            String::new()
+        }
     }
 
     fn ms_since(start: SystemTime) -> f32 {
@@ -148,4 +181,10 @@ impl ServerTiming {
             .as_secs_f32()
             * 1000.0
     }
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub struct Key {
+    input: String,
+    options: ProcessOptions,
 }
