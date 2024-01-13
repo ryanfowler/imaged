@@ -2,6 +2,7 @@ use std::{fmt::Write, sync::Arc, time::SystemTime};
 
 use anyhow::{anyhow, Result};
 use reqwest::Client;
+use tokio::sync::Semaphore;
 
 use crate::{
     cache::Cache,
@@ -14,6 +15,7 @@ pub struct Handler {
     pub client: Client,
     pub group: Group<Key, Arc<Result<ImageResponse>>>,
     pub processor: ImageProccessor,
+    pub semaphore: Semaphore,
 }
 
 #[derive(Clone)]
@@ -29,6 +31,21 @@ pub struct MetadataResponse {
 }
 
 impl Handler {
+    pub fn new(
+        cache: Option<Cache>,
+        client: Client,
+        processor: ImageProccessor,
+        concurrency: usize,
+    ) -> Self {
+        Self {
+            cache,
+            client,
+            group: Group::new(),
+            processor,
+            semaphore: Semaphore::new(concurrency),
+        }
+    }
+
     /// This method has to return an Arc<Result<_>> because of the use of
     /// singleflight, which requires the output implement the Clone trait.
     pub async fn get_image(
@@ -69,6 +86,8 @@ impl Handler {
         timing: bool,
         should_cache: bool,
     ) -> Result<ImageResponse> {
+        let _permit = self.semaphore.acquire().await?;
+
         let mut timing = ServerTiming::new(timing);
 
         if let Some(cache) = &self.cache {
@@ -111,6 +130,8 @@ impl Handler {
         thumbhash: bool,
         timing: bool,
     ) -> Result<MetadataResponse> {
+        let _permit = self.semaphore.acquire().await?;
+
         let mut timing = ServerTiming::new(timing);
 
         let start = SystemTime::now();
@@ -135,7 +156,7 @@ impl Handler {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub enum CacheResult {
     Hit,
     Miss,

@@ -51,12 +51,12 @@ async fn main() {
     let workers = std::thread::available_parallelism().unwrap().get();
     let processor = ImageProccessor::new(workers);
 
-    let state: Handler = Arc::new(handler::Handler {
+    let state: Handler = Arc::new(handler::Handler::new(
         cache,
         client,
-        group: singleflight::Group::new(),
         processor,
-    });
+        workers * 10,
+    ));
 
     let app = axum::Router::new()
         .route("/", routing::get(get_image))
