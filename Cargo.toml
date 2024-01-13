@@ -15,6 +15,7 @@ opt-level = 3
 strip = true
 
 [dependencies]
+ahash = "0.8.7"
 anyhow = "1.0.79"
 axum = { version = "0.7.3", features = ["query"] }
 base64 = "0.21.6"
