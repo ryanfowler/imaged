@@ -29,6 +29,8 @@ pub struct MetadataResponse {
 }
 
 impl Handler {
+    /// This method has to return an Arc<Result<_>> because of the use of
+    /// singleflight, which requires the output implement the Clone trait.
     pub async fn get_image(
         &self,
         url: &str,

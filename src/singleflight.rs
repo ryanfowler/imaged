@@ -1,17 +1,11 @@
-use std::{
-    borrow::ToOwned,
-    cmp::Eq,
-    future::Future,
-    hash::Hash,
-    sync::{Arc, Mutex},
-};
+use std::{borrow::ToOwned, cmp::Eq, future::Future, hash::Hash, sync::Mutex};
 
 use ahash::AHashMap;
 use tokio::sync::watch::{channel, Receiver, Sender};
 
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct Group<K, T> {
-    inner: Arc<Mutex<AHashMap<K, Receiver<Option<T>>>>>,
+    inner: Mutex<AHashMap<K, Receiver<Option<T>>>>,
 }
 
 impl<'a, K, T> Group<K, T>
@@ -21,7 +15,7 @@ where
 {
     pub fn new() -> Self {
         Group {
-            inner: Arc::new(Mutex::new(AHashMap::new())),
+            inner: Mutex::new(AHashMap::new()),
         }
     }
 

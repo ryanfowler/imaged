@@ -1,4 +1,4 @@
-use std::{fmt::Display, sync::Arc};
+use std::fmt::Display;
 
 use anyhow::{anyhow, Result};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -174,14 +174,14 @@ pub struct ImageMetadata {
 }
 
 pub struct ImageProccessor {
-    semaphore: Arc<Semaphore>,
+    semaphore: Semaphore,
 }
 
 impl ImageProccessor {
     pub fn new(num_workers: usize) -> Self {
         let num_workers = num_workers.max(1);
         ImageProccessor {
-            semaphore: Arc::new(Semaphore::new(num_workers)),
+            semaphore: Semaphore::new(num_workers),
         }
     }
 
