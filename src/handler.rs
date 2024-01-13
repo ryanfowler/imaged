@@ -10,7 +10,7 @@ use crate::{
 };
 
 pub struct Handler {
-    pub cache: Cache,
+    pub cache: Option<Cache>,
     pub client: Client,
     pub group: Group<Key, Arc<Result<ImageResponse>>>,
     pub processor: ImageProccessor,
@@ -63,15 +63,17 @@ impl Handler {
     ) -> Result<ImageResponse> {
         let mut timing = ServerTiming::new(timing);
 
-        let start = SystemTime::now();
-        let output = self.cache.get(url.to_owned(), options);
-        timing.push("cache_get", start);
-        if let Some(output) = output {
-            return Ok(ImageResponse {
-                cache_result: CacheResult::Hit,
-                output,
-                timing,
-            });
+        if let Some(cache) = &self.cache {
+            let start = SystemTime::now();
+            let output = cache.get(url.to_owned(), options);
+            timing.push("cache_get", start);
+            if let Some(output) = output {
+                return Ok(ImageResponse {
+                    cache_result: CacheResult::Hit,
+                    output,
+                    timing,
+                });
+            }
         }
 
         let start = SystemTime::now();
@@ -82,9 +84,11 @@ impl Handler {
         let output = self.processor.process_image(body, options).await?;
         timing.push("process", start);
 
-        let start = SystemTime::now();
-        self.cache.set(url.to_owned(), options, output.clone());
-        timing.push("cache_put", start);
+        if let Some(cache) = &self.cache {
+            let start = SystemTime::now();
+            cache.set(url.to_owned(), options, output.clone());
+            timing.push("cache_put", start);
+        }
 
         Ok(ImageResponse {
             cache_result: CacheResult::Miss,

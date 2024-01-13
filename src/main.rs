@@ -29,10 +29,15 @@ type Handler = Arc<handler::Handler>;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
-    let cache = cache::Cache::new(1 << 22);
+    let port = std::env::var("PORT").ok();
+    let cache_size = std::env::var("CACHE_SIZE").ok();
+
+    let cache = cache_size
+        .map(|v| v.parse().expect("invalid value for CACHE_SIZE"))
+        .map(|v| cache::Cache::new(v));
 
     let client = reqwest::Client::builder()
-        .user_agent("imaged")
+        .user_agent(NAME_VERSION)
         .timeout(Duration::from_secs(60))
         .build()
         .unwrap();
@@ -52,7 +57,7 @@ async fn main() {
         .route("/metadata", routing::get(get_image_metadata))
         .with_state(state);
 
-    let port = std::env::var("PORT").unwrap_or_else(|_| "8000".to_string());
+    let port = port.unwrap_or_else(|| "8000".to_string());
     let addr = format!("0.0.0.0:{}", port);
     let listener = TcpListener::bind(&addr).await.unwrap();
     println!("Starting server on {}", &addr);
