@@ -38,9 +38,7 @@ async fn main() {
         println!("Using an in-memory cache of size {}MB", size);
     }
 
-    let cache = cache_size_mb
-        .map(|v| v * 1_048_576)
-        .map(|v| cache::Cache::new(v));
+    let cache = cache_size_mb.map(|v| v * 1_048_576).map(cache::Cache::new);
 
     let client = reqwest::Client::builder()
         .user_agent(NAME_VERSION)
