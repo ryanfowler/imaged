@@ -20,7 +20,7 @@ anyhow = "1.0.79"
 axum = { version = "0.7.4", features = ["query"] }
 base64 = "0.21.6"
 bytes = "1.5.0"
-image = { version = "0.24.7", default-features = false, features = ["avif-encoder", "png", "tiff"] }
+image = { version = "0.24.8", default-features = false, features = ["avif-encoder", "png", "tiff"] }
 jemallocator = { version = "0.5.4" }
 kamadak-exif = "0.5.5"
 libavif-image = { version = "0.11.0", default-features = false, features = ["codec-dav1d"] }
