@@ -111,8 +111,11 @@ async fn get_image(
         res = res.header("x-image-debug", &raw);
     }
 
-    res.header("x-cache-status", result.cache_result.as_str())
-        .header("x-image-height", result.output.height)
+    if let Some(cache_result) = result.cache_result {
+        res = res.header("x-cache-status", cache_result.as_str())
+    }
+
+    res.header("x-image-height", result.output.height)
         .header("x-image-width", result.output.width)
         .body(Body::from(result.output.buf.clone()))
         .unwrap()

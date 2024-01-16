@@ -20,7 +20,7 @@ pub struct Handler {
 
 #[derive(Clone)]
 pub struct ImageResponse {
-    pub cache_result: CacheResult,
+    pub cache_result: Option<CacheResult>,
     pub output: ImageOutput,
     pub timing: ServerTiming,
 }
@@ -96,7 +96,7 @@ impl Handler {
             timing.push("cache_get", start);
             if let Some(output) = output {
                 return Ok(ImageResponse {
-                    cache_result: CacheResult::Hit,
+                    cache_result: Some(CacheResult::Hit),
                     output,
                     timing,
                 });
@@ -118,7 +118,7 @@ impl Handler {
         }
 
         Ok(ImageResponse {
-            cache_result: CacheResult::Miss,
+            cache_result: self.cache.as_ref().map(|_| CacheResult::Miss),
             output,
             timing,
         })
