@@ -30,15 +30,20 @@ type Handler = Arc<handler::Handler>;
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     let port = std::env::var("PORT").ok();
-    let cache_size_mb = std::env::var("CACHE_SIZE_MB")
+    let cache_size_mb = std::env::var("CACHE_SIZE")
         .ok()
-        .map(|v| v.parse::<usize>().expect("invalid value for CACHE_SIZE_MB"));
+        .map(|v| byte_unit::Byte::parse_str(v, true).expect("invalid value for CACHE_SIZE"));
 
     if let Some(size) = cache_size_mb {
-        println!("Using an in-memory cache of size {}MB", size);
+        println!(
+            "Using an in-memory cache of size {}",
+            size.get_appropriate_unit(byte_unit::UnitType::Both)
+        );
     }
 
-    let cache = cache_size_mb.map(|v| v * 1_048_576).map(cache::Cache::new);
+    let cache = cache_size_mb
+        .map(|v| v.as_u64() as usize)
+        .map(cache::Cache::new);
 
     let client = reqwest::Client::builder()
         .user_agent(NAME_VERSION)
