@@ -31,7 +31,7 @@ impl Cache {
     pub fn set(&self, input: String, options: ProcessOptions, output: ImageOutput) {
         let mut guard = self.mu.lock().unwrap();
         guard.size += output.buf.len();
-        if let Some((_, val)) = guard.lru.push(Key { input, options }, output) {
+        if let Some(val) = guard.lru.put(Key { input, options }, output) {
             guard.size -= val.buf.len();
         }
         while guard.size > guard.max {

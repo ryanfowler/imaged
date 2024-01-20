@@ -19,6 +19,12 @@ pub struct Data {
     iso: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     exposure_time: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    latitude: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    longitude: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    altitude: Option<f64>,
 }
 
 pub struct ExifData {
@@ -43,6 +49,9 @@ impl ExifData {
             f_number: self.get_f_number(),
             iso: self.get_iso(),
             exposure_time: self.get_exposure_time(),
+            latitude: self.get_latitude(),
+            longitude: self.get_longitude(),
+            altitude: self.get_altitude(),
         }
     }
 
@@ -82,6 +91,66 @@ impl ExifData {
             .map(|(num, denom)| format!("{}/{}", num, denom))
     }
 
+    fn get_latitude(&self) -> Option<f64> {
+        self.get_coordinate(Tag::GPSLatitude)
+            .map(|v| {
+                if let Some(field) = self.exif.get_field(Tag::GPSLatitudeRef, In::PRIMARY) {
+                    if let exif::Value::Ascii(n) = &field.value {
+                        if let Some(s) = n.first() {
+                            if s.starts_with(&[b'S']) {
+                                return v * -1.0;
+                            }
+                        }
+                    }
+                }
+                v
+            })
+            .map(|v| (100000.0 * v).round() / 100000.0)
+    }
+
+    fn get_longitude(&self) -> Option<f64> {
+        self.get_coordinate(Tag::GPSLongitude)
+            .map(|v| {
+                if let Some(field) = self.exif.get_field(Tag::GPSLongitudeRef, In::PRIMARY) {
+                    if let exif::Value::Ascii(n) = &field.value {
+                        if let Some(s) = n.first() {
+                            if s.starts_with(&[b'W']) {
+                                return v * -1.0;
+                            }
+                        }
+                    }
+                }
+                v
+            })
+            .map(|v| (100000.0 * v).round() / 100000.0)
+    }
+
+    fn get_altitude(&self) -> Option<f64> {
+        self.get_float64(Tag::GPSAltitude)
+            .map(|v| {
+                if let Some(1) = self.get_field_u32(Tag::GPSAltitudeRef) {
+                    v * -1.0
+                } else {
+                    v
+                }
+            })
+            .map(|v| (10.0 * v).round() / 10.0)
+    }
+
+    fn get_coordinate(&self, tag: Tag) -> Option<f64> {
+        if let Some(field) = self.exif.get_field(tag, In::PRIMARY) {
+            if let Value::Rational(n) = &field.value {
+                if n.len() >= 3 {
+                    let hours = n[0].to_f64();
+                    let minutes = n[1].to_f64();
+                    let seconds = n[2].to_f64();
+                    return Some(hours + (minutes / 60.0) + (seconds / 3600.0));
+                }
+            }
+        }
+        None
+    }
+
     fn get_field_string(&self, tag: Tag) -> Option<String> {
         if let Some(field) = self.exif.get_field(tag, In::PRIMARY) {
             if let Value::Ascii(v) = &field.value {
@@ -109,77 +178,13 @@ impl ExifData {
             .get_field(tag, In::PRIMARY)
             .and_then(|field| field.value.get_uint(0))
     }
+
+    fn get_float64(&self, tag: Tag) -> Option<f64> {
+        self.exif.get_field(tag, In::PRIMARY).and_then(|field| {
+            if let exif::Value::Rational(v) = &field.value {
+                return v.first().map(|v| v.to_f64());
+            }
+            None
+        })
+    }
 }
-
-// #[derive(Clone, Debug, Default)]
-// struct Coordinates {
-//     lat: f64,
-//     lon: f64,
-// }
-
-// #[derive(Debug, Clone, Default)]
-// struct Location {
-//     coords: Option<Coordinates>,
-//     altitude: Option<f64>,
-// }
-
-// fn parse_location(e: &exif::Exif) -> Location {
-//     let mut location = Location::default();
-
-//     location.altitude = get_float(e, exif::Tag::GPSAltitude, exif::In::PRIMARY);
-
-//     let latitude = parse_coordinate(e, exif::Tag::GPSLatitude, exif::In::PRIMARY).and_then(|v| {
-//         if let Some(field) = e.get_field(exif::Tag::GPSLatitudeRef, exif::In::PRIMARY) {
-//             if let exif::Value::Ascii(n) = &field.value {
-//                 if let Some(s) = n.get(0) {
-//                     if s.starts_with(&[b'S']) {
-//                         return Some(v * -1.0);
-//                     }
-//                 }
-//             }
-//         }
-//         Some(v)
-//     });
-
-//     let longitude = parse_coordinate(e, exif::Tag::GPSLongitude, exif::In::PRIMARY).and_then(|v| {
-//         if let Some(field) = e.get_field(exif::Tag::GPSLongitudeRef, exif::In::PRIMARY) {
-//             if let exif::Value::Ascii(n) = &field.value {
-//                 if let Some(s) = n.get(0) {
-//                     if s.starts_with(&[b'W']) {
-//                         return Some(v * -1.0);
-//                     }
-//                 }
-//             }
-//         }
-//         Some(v)
-//     });
-
-//     if let (Some(lat), Some(lon)) = (latitude, longitude) {
-//         location.coords = Some(Coordinates { lat, lon });
-//     }
-
-//     location
-// }
-
-// fn parse_coordinate(e: &exif::Exif, tag: exif::Tag, ifd_num: exif::In) -> Option<f64> {
-//     if let Some(field) = e.get_field(tag, ifd_num) {
-//         if let exif::Value::Rational(n) = &field.value {
-//             if n.len() >= 3 {
-//                 let hours = n[0].to_f64();
-//                 let minutes = n[1].to_f64();
-//                 let seconds = n[2].to_f64();
-//                 return Some(hours + (minutes / 60.0) + (seconds / 3600.0));
-//             }
-//         }
-//     }
-//     None
-// }
-
-// fn get_float(e: &exif::Exif, tag: exif::Tag, ifd_num: exif::In) -> Option<f64> {
-//     if let Some(field) = e.get_field(tag, ifd_num) {
-//         if let exif::Value::Rational(n) = &field.value {
-//             return n.get(0).and_then(|v| Some(v.to_f64()));
-//         }
-//     }
-//     None
-// }

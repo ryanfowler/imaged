@@ -16,7 +16,7 @@ build:
 
 .PHONY: start
 start: build
-	@docker run -itd --rm --network host --env PORT=$(PORT) --name imaged -p $(PORT):$(PORT) imaged
+	@docker run -itd --rm --network host --env PORT=$(PORT) --name imaged imaged
 
 .PHONY: stop
 stop:
