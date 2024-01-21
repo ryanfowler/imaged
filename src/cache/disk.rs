@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use bytes::Bytes;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -29,33 +29,32 @@ impl DiskCache {
     pub async fn get(&self, input: String, ops: ProcessOptions) -> Result<Option<ImageOutput>> {
         let path = self.get_file_path(input, ops);
         let _permit = self.sema.acquire().await?;
-        tokio::task::spawn_blocking(move || Self::get_inner(path))
-            .await
-            .map_err(|err| err.into())
+        tokio::task::spawn_blocking(move || Self::get_inner(path)).await?
     }
 
-    pub async fn set(&self, input: String, ops: ProcessOptions, output: ImageOutput) {
+    pub async fn set(&self, input: String, ops: ProcessOptions, output: ImageOutput) -> Result<()> {
         let path = self.get_file_path(input, ops);
-        let _permit = match self.sema.acquire().await {
-            Ok(permit) => permit,
-            Err(_) => return,
-        };
-        tokio::task::spawn_blocking(move || Self::set_inner(path, output).unwrap_or_default())
-            .await
-            .unwrap_or_default()
+        let _permit = self.sema.acquire().await?;
+        tokio::task::spawn_blocking(move || Self::set_inner(path, output)).await?
     }
 
-    fn get_inner(path: PathBuf) -> Option<ImageOutput> {
-        let data = std::fs::read(path).ok()?;
+    fn get_inner(path: PathBuf) -> Result<Option<ImageOutput>> {
+        let data = std::fs::read(path)?;
+        if data.len() < 4 {
+            return Err(anyhow!("invalid cached file: too short"));
+        }
         let meta_length = u32::from_be_bytes([data[0], data[1], data[2], data[3]]) as usize;
-        let mut output: ImageOutput = serde_json::from_slice(&data[4..4 + meta_length]).ok()?;
+        if data.len() < meta_length + 4 {
+            return Err(anyhow!("invalid cached file: length is incorrect"));
+        }
 
+        let mut output: ImageOutput = serde_json::from_slice(&data[4..4 + meta_length])?;
         let data = Bytes::from(data);
         output.buf = data.slice(4 + meta_length..);
-        Some(output)
+        Ok(Some(output))
     }
 
-    fn set_inner(path: PathBuf, output: ImageOutput) -> Option<()> {
+    fn set_inner(path: PathBuf, output: ImageOutput) -> Result<()> {
         let raw: Vec<u8> = Vec::with_capacity(128);
         let mut cursor = Cursor::new(raw);
         _ = cursor.write(&[0, 0, 0, 0]);
@@ -66,8 +65,10 @@ impl DiskCache {
         let contents = cursor.into_inner();
 
         let mut file = Self::create_file(&path)?;
-        file.write_all(&contents).ok()?;
-        file.write_all(&output.buf).ok()
+        file.write_all(&contents)?;
+        file.write_all(&output.buf)?;
+        file.flush()?;
+        Ok(())
     }
 
     fn get_file_path(&self, input: String, ops: ProcessOptions) -> PathBuf {
@@ -87,15 +88,17 @@ impl DiskCache {
         hex::encode(hash)
     }
 
-    fn create_file(path: &Path) -> Option<File> {
-        File::create(path).ok().or_else(|| {
-            if let Some(parent) = path.parent() {
-                if std::fs::create_dir_all(parent).is_ok() {
-                    return File::create(path).ok();
+    fn create_file(path: &Path) -> Result<File> {
+        File::create(path)
+            .or_else(|err| {
+                if let Some(parent) = path.parent() {
+                    if std::fs::create_dir_all(parent).is_ok() {
+                        return File::create(path);
+                    }
                 }
-            }
-            None
-        })
+                Err(err)
+            })
+            .map_err(|err| err.into())
     }
 }
 
