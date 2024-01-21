@@ -5,9 +5,9 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
+use blake3::{Hash, Hasher};
 use bytes::Bytes;
 use serde::Serialize;
-use sha2::{Digest, Sha256};
 use tokio::sync::Semaphore;
 
 use crate::image::{ImageOutput, ProcessOptions};
@@ -58,7 +58,7 @@ impl DiskCache {
         let raw: Vec<u8> = Vec::with_capacity(128);
         let mut cursor = Cursor::new(raw);
         _ = cursor.write(&[0, 0, 0, 0]);
-        serde_json::to_writer(&mut cursor, &output).unwrap();
+        serde_json::to_writer(&mut cursor, &output)?;
         let length = (cursor.position() - 4) as u32;
         cursor.set_position(0);
         _ = cursor.write(&length.to_be_bytes());
@@ -72,20 +72,19 @@ impl DiskCache {
     }
 
     fn get_file_path(&self, input: &str, ops: ProcessOptions) -> PathBuf {
-        let hash = Self::get_hash(input, ops);
+        let hash = Self::get_hash(input, ops).to_hex();
         let mut path = self.dir.to_owned();
         path.push(&hash.as_str()[hash.len() - 1..]);
         path.push(&hash.as_str()[hash.len() - 3..hash.len() - 1]);
-        path.push(&hash);
+        path.push(hash.as_str());
         path
     }
 
-    fn get_hash(input: &str, ops: ProcessOptions) -> String {
+    fn get_hash(input: &str, ops: ProcessOptions) -> Hash {
         let key = serde_json::to_vec(&Key { input, ops }).unwrap();
-        let mut hasher = Sha256::new();
+        let mut hasher = Hasher::new();
         hasher.update(&key);
-        let hash = hasher.finalize();
-        hex::encode(hash)
+        hasher.finalize()
     }
 
     fn create_file(path: &Path) -> Result<File> {
