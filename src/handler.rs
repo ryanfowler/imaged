@@ -108,7 +108,7 @@ impl Handler {
 
         if let Some(cache) = &self.disk_cache {
             let start = SystemTime::now();
-            let output = cache.get(url.to_owned(), options).await;
+            let output = cache.get(url, options).await;
             timing.push("disk_cache_get", start);
             if let Ok(Some(output)) = output {
                 if let (Some(mem_cache), true) = (&self.mem_cache, should_cache) {
@@ -140,7 +140,7 @@ impl Handler {
 
         if let (Some(cache), true) = (&self.disk_cache, should_cache) {
             let start = SystemTime::now();
-            _ = cache.set(url.to_owned(), options, output.clone()).await;
+            _ = cache.set(url, options, output.clone()).await;
             timing.push("disk_cache_put", start);
         }
 

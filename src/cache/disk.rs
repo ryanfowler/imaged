@@ -26,13 +26,13 @@ impl DiskCache {
         })
     }
 
-    pub async fn get(&self, input: String, ops: ProcessOptions) -> Result<Option<ImageOutput>> {
+    pub async fn get(&self, input: &str, ops: ProcessOptions) -> Result<Option<ImageOutput>> {
         let path = self.get_file_path(input, ops);
         let _permit = self.sema.acquire().await?;
         tokio::task::spawn_blocking(move || Self::get_inner(path)).await?
     }
 
-    pub async fn set(&self, input: String, ops: ProcessOptions, output: ImageOutput) -> Result<()> {
+    pub async fn set(&self, input: &str, ops: ProcessOptions, output: ImageOutput) -> Result<()> {
         let path = self.get_file_path(input, ops);
         let _permit = self.sema.acquire().await?;
         tokio::task::spawn_blocking(move || Self::set_inner(path, output)).await?
@@ -71,7 +71,7 @@ impl DiskCache {
         Ok(())
     }
 
-    fn get_file_path(&self, input: String, ops: ProcessOptions) -> PathBuf {
+    fn get_file_path(&self, input: &str, ops: ProcessOptions) -> PathBuf {
         let hash = Self::get_hash(input, ops);
         let mut path = self.dir.to_owned();
         path.push(&hash.as_str()[hash.len() - 1..]);
@@ -80,7 +80,7 @@ impl DiskCache {
         path
     }
 
-    fn get_hash(input: String, ops: ProcessOptions) -> String {
+    fn get_hash(input: &str, ops: ProcessOptions) -> String {
         let key = serde_json::to_vec(&Key { input, ops }).unwrap();
         let mut hasher = Sha256::new();
         hasher.update(&key);
@@ -103,7 +103,7 @@ impl DiskCache {
 }
 
 #[derive(Serialize)]
-struct Key {
-    input: String,
+struct Key<'a> {
+    input: &'a str,
     ops: ProcessOptions,
 }
