@@ -5,13 +5,14 @@ use reqwest::Client;
 use tokio::sync::Semaphore;
 
 use crate::{
-    cache::Cache,
+    cache::{disk::DiskCache, memory::MemoryCache},
     image::{ImageMetadata, ImageOutput, ImageProccessor, MetadataOptions, ProcessOptions},
     singleflight::Group,
 };
 
 pub struct Handler {
-    pub cache: Option<Cache>,
+    pub mem_cache: Option<MemoryCache>,
+    pub disk_cache: Option<DiskCache>,
     pub client: Client,
     pub group: Group<Key, Arc<Result<ImageResponse>>>,
     pub processor: ImageProccessor,
@@ -32,13 +33,15 @@ pub struct MetadataResponse {
 
 impl Handler {
     pub fn new(
-        cache: Option<Cache>,
+        mem_cache: Option<MemoryCache>,
+        disk_cache: Option<DiskCache>,
         client: Client,
         processor: ImageProccessor,
         concurrency: usize,
     ) -> Self {
         Self {
-            cache,
+            mem_cache,
+            disk_cache,
             client,
             group: Group::new(),
             processor,
@@ -90,11 +93,29 @@ impl Handler {
 
         let mut timing = ServerTiming::new(timing);
 
-        if let Some(cache) = &self.cache {
+        if let Some(cache) = &self.mem_cache {
             let start = SystemTime::now();
             let output = cache.get(url.to_owned(), options);
-            timing.push("cache_get", start);
+            timing.push("mem_cache_get", start);
             if let Some(output) = output {
+                return Ok(ImageResponse {
+                    cache_result: Some(CacheResult::Hit),
+                    output,
+                    timing,
+                });
+            }
+        }
+
+        if let Some(cache) = &self.disk_cache {
+            let start = SystemTime::now();
+            let output = cache.get(url.to_owned(), options).await;
+            timing.push("disk_cache_get", start);
+            if let Ok(Some(output)) = output {
+                if let Some(mem_cache) = &self.mem_cache {
+                    let start = SystemTime::now();
+                    mem_cache.set(url.to_owned(), options, output.to_owned());
+                    timing.push("mem_cache_put", start);
+                }
                 return Ok(ImageResponse {
                     cache_result: Some(CacheResult::Hit),
                     output,
@@ -111,14 +132,23 @@ impl Handler {
         let output = self.processor.process_image(body, options).await?;
         timing.push("process", start);
 
-        if let (Some(cache), true) = (&self.cache, should_cache) {
+        if let (Some(cache), true) = (&self.mem_cache, should_cache) {
             let start = SystemTime::now();
             cache.set(url.to_owned(), options, output.clone());
-            timing.push("cache_put", start);
+            timing.push("mem_cache_put", start);
         }
 
+        if let (Some(cache), true) = (&self.disk_cache, should_cache) {
+            let start = SystemTime::now();
+            cache.set(url.to_owned(), options, output.clone()).await;
+            timing.push("disk_cache_put", start);
+        }
+
+        let cache_result =
+            (self.mem_cache.is_some() || self.disk_cache.is_some()).then_some(CacheResult::Miss);
+
         Ok(ImageResponse {
-            cache_result: self.cache.as_ref().map(|_| CacheResult::Miss),
+            cache_result,
             output,
             timing,
         })

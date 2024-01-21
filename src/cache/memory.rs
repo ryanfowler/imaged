@@ -4,13 +4,13 @@ use lru::LruCache;
 
 use crate::image::{ImageOutput, ProcessOptions};
 
-pub struct Cache {
+pub struct MemoryCache {
     mu: Mutex<Inner>,
 }
 
-impl Cache {
+impl MemoryCache {
     pub fn new(max_bytes: usize) -> Self {
-        Cache {
+        MemoryCache {
             mu: Mutex::new(Inner {
                 lru: LruCache::unbounded(),
                 max: max_bytes,

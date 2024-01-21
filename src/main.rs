@@ -14,6 +14,10 @@ use tokio::{
     signal::unix::{signal, SignalKind},
 };
 
+use cache::memory::MemoryCache;
+
+use crate::cache::disk::DiskCache;
+
 mod cache;
 mod exif;
 mod handler;
@@ -30,20 +34,29 @@ type Handler = Arc<handler::Handler>;
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     let port = std::env::var("PORT").ok();
-    let cache_size_mb = std::env::var("CACHE_SIZE")
+    let mem_cache_size = std::env::var("MEM_CACHE_SIZE")
         .ok()
-        .map(|v| byte_unit::Byte::parse_str(v, true).expect("invalid value for CACHE_SIZE"));
+        .map(|v| byte_unit::Byte::parse_str(v, true).expect("invalid value for MEM_CACHE_SIZE"));
+    let disk_cache_path = std::env::var("DISK_CACHE_PATH").ok();
 
-    if let Some(size) = cache_size_mb {
+    if let Some(size) = mem_cache_size {
         println!(
             "Using an in-memory cache of size {}",
             size.get_appropriate_unit(byte_unit::UnitType::Both)
         );
     }
+    if let Some(path) = &disk_cache_path {
+        println!("Using a disk cache at path {}", &path);
+    }
 
-    let cache = cache_size_mb
+    let mem_cache = mem_cache_size
         .map(|v| v.as_u64() as usize)
-        .map(cache::Cache::new);
+        .map(MemoryCache::new);
+
+    let disk_cache = disk_cache_path.map(|v| v.into()).map(DiskCache::new);
+    if let Some(Err(err)) = disk_cache {
+        panic!("{}", err);
+    }
 
     let client = reqwest::Client::builder()
         .user_agent(NAME_VERSION)
@@ -55,7 +68,8 @@ async fn main() {
     let processor = ImageProccessor::new(workers);
 
     let state: Handler = Arc::new(handler::Handler::new(
-        cache,
+        mem_cache,
+        disk_cache.and_then(|v| v.ok()),
         client,
         processor,
         workers * 10,

@@ -129,17 +129,23 @@ impl ImageType {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize)]
 pub struct ProcessOptions {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub width: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub height: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub out_type: Option<ImageType>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub quality: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub blur: Option<u32>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ImageOutput {
+    #[serde(skip)]
     pub buf: bytes::Bytes,
     pub img_type: ImageType,
     pub width: u32,
