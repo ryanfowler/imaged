@@ -26,7 +26,7 @@ anyhow = "1.0.79"
 axum = { version = "0.7.4", features = ["query"] }
 base64 = "0.21.6"
 blake3 = "1.5.0"
-byte-unit = { version = "5.1.3", features = ["byte"] }
+byte-unit = { version = "5.1.4", features = ["byte"] }
 bytes = "1.5.0"
 image = { version = "0.24.8", default-features = false, features = ["avif-encoder", "png", "tiff"] }
 jemallocator = { version = "0.5.4" }
