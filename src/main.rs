@@ -37,6 +37,9 @@ async fn main() {
     let mem_cache_size = std::env::var("MEM_CACHE_SIZE")
         .ok()
         .map(|v| byte_unit::Byte::parse_str(v, true).expect("invalid value for MEM_CACHE_SIZE"));
+    let disk_cache_size = std::env::var("DISK_CACHE_SIZE")
+        .ok()
+        .map(|v| byte_unit::Byte::parse_str(v, true).expect("invalid value for DISK_CACHE_SIZE"));
     let disk_cache_path = std::env::var("DISK_CACHE_PATH").ok();
 
     if let Some(size) = mem_cache_size {
@@ -45,18 +48,23 @@ async fn main() {
             size.get_appropriate_unit(byte_unit::UnitType::Both)
         );
     }
-    if let Some(path) = &disk_cache_path {
-        println!("Using a disk cache at path {}", &path);
+    if let (Some(size), Some(path)) = (disk_cache_size, &disk_cache_path) {
+        println!(
+            "Using a disk cache of size {} at path {}",
+            size.get_appropriate_unit(byte_unit::UnitType::Both),
+            &path
+        );
     }
 
     let mem_cache = mem_cache_size
         .map(|v| v.as_u64() as usize)
         .map(MemoryCache::new);
 
-    let disk_cache = disk_cache_path.map(|v| v.into()).map(DiskCache::new);
-    if let Some(Err(err)) = disk_cache {
-        panic!("{}", err);
-    }
+    let disk_cache = if let (Some(size), Some(path)) = (disk_cache_size, disk_cache_path) {
+        Some(DiskCache::new(path.into(), size.as_u64()).await.unwrap())
+    } else {
+        None
+    };
 
     let client = reqwest::Client::builder()
         .user_agent(NAME_VERSION)
@@ -69,7 +77,7 @@ async fn main() {
 
     let state: Handler = Arc::new(handler::Handler::new(
         mem_cache,
-        disk_cache.and_then(|v| v.ok()),
+        disk_cache,
         client,
         processor,
         workers * 10,
@@ -121,7 +129,7 @@ async fn get_image(
 
     let mut res = new_response().header("content-type", result.output.img_type.mimetype());
 
-    if result.timing.should_show() {
+    if query.is_timing() {
         res = res.header("server-timing", &result.timing.header());
     }
 
