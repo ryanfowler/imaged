@@ -19,7 +19,8 @@ impl MemoryCache {
         }
     }
 
-    pub fn get(&self, input: String, options: ProcessOptions) -> Option<ImageOutput> {
+    pub fn get(&self, input: &str, options: ProcessOptions) -> Option<ImageOutput> {
+        let input = input.to_owned();
         self.mu
             .lock()
             .unwrap()
@@ -28,7 +29,8 @@ impl MemoryCache {
             .map(|v| v.to_owned())
     }
 
-    pub fn set(&self, input: String, options: ProcessOptions, output: ImageOutput) {
+    pub fn set(&self, input: &str, options: ProcessOptions, output: ImageOutput) {
+        let input = input.to_owned();
         let mut guard = self.mu.lock().unwrap();
         guard.size += output.buf.len();
         if let Some(val) = guard.lru.put(Key { input, options }, output) {

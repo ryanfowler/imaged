@@ -95,7 +95,7 @@ impl Handler {
 
         if let Some(cache) = &self.mem_cache {
             let start = SystemTime::now();
-            let output = cache.get(url.to_owned(), options);
+            let output = cache.get(url, options);
             timing.push("mem_cache_get", start);
             if let Some(output) = output {
                 return Ok(ImageResponse {
@@ -113,7 +113,7 @@ impl Handler {
             if let Ok(Some(output)) = output {
                 if let (Some(mem_cache), true) = (&self.mem_cache, should_cache) {
                     let start = SystemTime::now();
-                    mem_cache.set(url.to_owned(), options, output.to_owned());
+                    mem_cache.set(url, options, output.to_owned());
                     timing.push("mem_cache_put", start);
                 }
                 return Ok(ImageResponse {
@@ -134,7 +134,7 @@ impl Handler {
 
         if let (Some(cache), true) = (&self.mem_cache, should_cache) {
             let start = SystemTime::now();
-            cache.set(url.to_owned(), options, output.clone());
+            cache.set(url, options, output.clone());
             timing.push("mem_cache_put", start);
         }
 
