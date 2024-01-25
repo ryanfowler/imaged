@@ -14,9 +14,7 @@ use tokio::{
     signal::unix::{signal, SignalKind},
 };
 
-use cache::memory::MemoryCache;
-
-use crate::cache::disk::DiskCache;
+use crate::cache::{disk::DiskCache, memory::MemoryCache};
 
 mod cache;
 mod exif;

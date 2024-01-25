@@ -92,7 +92,6 @@ impl DiskCache {
 
     async fn clean(&self) {
         let mut cur_size = self.inner.cur_size.load(Ordering::Acquire);
-
         if cur_size <= self.inner.max_size {
             return;
         }
@@ -230,6 +229,8 @@ impl DiskCache {
         hasher.finalize()
     }
 
+    // create a new file, failing if the file already exists. This function
+    // will create all parent directories if necessary.
     fn create_file(path: &Path) -> std::io::Result<File> {
         let res = OpenOptions::new().write(true).create_new(true).open(path);
         let err = match res {
