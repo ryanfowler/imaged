@@ -7,6 +7,7 @@ use tokio::sync::Semaphore;
 use crate::{
     cache::{disk::DiskCache, memory::MemoryCache},
     image::{ImageMetadata, ImageOutput, ImageProccessor, MetadataOptions, ProcessOptions},
+    signature::Verifier,
     singleflight::Group,
 };
 
@@ -17,6 +18,7 @@ pub struct Handler {
     pub group: Group<Key, Arc<Result<ImageResponse>>>,
     pub processor: ImageProccessor,
     pub semaphore: Semaphore,
+    pub verifier: Option<Verifier>,
 }
 
 #[derive(Clone)]
@@ -38,6 +40,7 @@ impl Handler {
         client: Client,
         processor: ImageProccessor,
         concurrency: usize,
+        verifier: Option<Verifier>,
     ) -> Self {
         Self {
             mem_cache,
@@ -46,7 +49,24 @@ impl Handler {
             group: Group::new(),
             processor,
             semaphore: Semaphore::new(concurrency),
+            verifier,
         }
+    }
+
+    pub fn verify(&self, path: &str, query: Option<&str>, sig: Option<&str>) -> Result<()> {
+        let Some(verifier) = &self.verifier else {
+            return Ok(());
+        };
+
+        let Some(sig) = sig else {
+            return Err(anyhow!("signature must be provided"));
+        };
+
+        if !verifier.verify(path, query, sig.as_bytes())? {
+            return Err(anyhow!("invalid signature provided"));
+        }
+
+        Ok(())
     }
 
     /// This method has to return an Arc<Result<_>> because of the use of
