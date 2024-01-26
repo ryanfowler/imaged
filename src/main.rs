@@ -2,7 +2,7 @@ use std::{ops::Deref, sync::Arc, time::Duration};
 
 use axum::{
     body::Body,
-    extract::{Query, State},
+    extract::{Query, Request, State},
     http::{response::Builder, HeaderMap, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
     routing,
@@ -14,12 +14,16 @@ use tokio::{
     signal::unix::{signal, SignalKind},
 };
 
-use crate::cache::{disk::DiskCache, memory::MemoryCache};
+use crate::{
+    cache::{disk::DiskCache, memory::MemoryCache},
+    signature::Verifier,
+};
 
 mod cache;
 mod exif;
 mod handler;
 mod image;
+mod signature;
 mod singleflight;
 
 static NAME_VERSION: &str = concat!("imaged/", env!("CARGO_PKG_VERSION"));
@@ -39,6 +43,7 @@ async fn main() {
         .ok()
         .map(|v| byte_unit::Byte::parse_str(v, true).expect("invalid value for DISK_CACHE_SIZE"));
     let disk_cache_path = std::env::var("DISK_CACHE_PATH").ok();
+    let verify_keys = std::env::var("VERIFY_KEYS").ok();
 
     if let Some(size) = mem_cache_size {
         println!(
@@ -64,6 +69,15 @@ async fn main() {
         None
     };
 
+    let verifier = verify_keys
+        .map(|keys| keys.split(',').map(|v| v.to_owned()).collect::<Vec<_>>())
+        .map(Verifier::new)
+        .map(|res| {
+            res.unwrap_or_else(|err| {
+                panic!("invalid verification key provided: {}", err);
+            })
+        });
+
     let client = reqwest::Client::builder()
         .user_agent(NAME_VERSION)
         .timeout(Duration::from_secs(60))
@@ -79,6 +93,7 @@ async fn main() {
         client,
         processor,
         workers * 10,
+        verifier,
     ));
 
     let app = axum::Router::new()
@@ -111,7 +126,13 @@ async fn get_image(
     headers: HeaderMap,
     Query(query): Query<ImageQuery>,
     State(state): State<Handler>,
+    request: Request,
 ) -> Response {
+    let uri = request.uri();
+    if let Err(err) = state.verify(uri.path(), uri.query(), query.s.as_deref()) {
+        return (StatusCode::BAD_REQUEST, err.to_string()).into_response();
+    }
+
     let result = state
         .get_image(
             &query.url,
@@ -196,6 +217,8 @@ struct ImageQuery {
     blur: Option<u32>,
     #[serde(default)]
     nocache: Option<String>,
+    #[serde(default)]
+    s: Option<String>,
 }
 
 impl ImageQuery {
