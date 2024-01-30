@@ -9,15 +9,11 @@ pub struct Verifier {
 }
 
 impl Verifier {
-    pub fn new(keys: Vec<String>) -> Result<Self> {
-        let mut out = Vec::with_capacity(keys.len());
-
-        for key in keys {
-            let pkey = Self::parse_public_key(&key)?;
-            out.push(pkey);
-        }
-
-        Ok(Verifier { keys: out })
+    pub fn new(input: impl Iterator<Item = String>) -> Result<Self> {
+        let keys = input
+            .map(|v| Self::parse_public_key(&v))
+            .collect::<Result<_, _>>()?;
+        Ok(Verifier { keys })
     }
 
     pub fn verify(&self, path: &str, query: Option<&str>, hex_sig: &[u8]) -> Result<bool> {

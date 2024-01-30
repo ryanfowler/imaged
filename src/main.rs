@@ -69,14 +69,10 @@ async fn main() {
         None
     };
 
-    let verifier = verify_keys
-        .map(|keys| keys.split(',').map(|v| v.to_owned()).collect::<Vec<_>>())
-        .map(Verifier::new)
-        .map(|res| {
-            res.unwrap_or_else(|err| {
-                panic!("invalid verification key provided: {}", err);
-            })
-        });
+    let verifier = verify_keys.map(|keys| {
+        Verifier::new(keys.split(',').map(|v| v.to_owned()))
+            .expect("invalid verification key provided")
+    });
 
     let client = reqwest::Client::builder()
         .user_agent(NAME_VERSION)
