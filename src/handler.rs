@@ -83,23 +83,13 @@ impl Handler {
             options,
         };
         self.group
-            .run(&key, || {
-                self.get_image_singleflight(url, options, timing, should_cache)
+            .run(&key, || async {
+                Arc::new(
+                    self.get_image_inner(url, options, timing, should_cache)
+                        .await,
+                )
             })
             .await
-    }
-
-    async fn get_image_singleflight(
-        &self,
-        url: &str,
-        options: ProcessOptions,
-        timing: bool,
-        should_cache: bool,
-    ) -> Arc<Result<ImageResponse>> {
-        Arc::new(
-            self.get_image_inner(url, options, timing, should_cache)
-                .await,
-        )
     }
 
     async fn get_image_inner(
