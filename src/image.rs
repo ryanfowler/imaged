@@ -87,7 +87,7 @@ impl Display for ImageType {
 }
 
 impl ImageType {
-    pub fn as_str(&self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             ImageType::Avif => "avif",
             ImageType::Jpeg => "jpeg",
@@ -108,7 +108,7 @@ impl ImageType {
         }
     }
 
-    pub fn mimetype(&self) -> &'static str {
+    pub fn mimetype(self) -> &'static str {
         match self {
             ImageType::Avif => "image/avif",
             ImageType::Jpeg => "image/jpeg",
@@ -118,13 +118,10 @@ impl ImageType {
         }
     }
 
-    fn default_quality(&self) -> u32 {
+    fn default_quality(self) -> u32 {
         match self {
             ImageType::Avif => 50,
-            ImageType::Jpeg => 75,
-            ImageType::Png => 75,
-            ImageType::Tiff => 75,
-            ImageType::Webp => 75,
+            ImageType::Jpeg | ImageType::Png | ImageType::Tiff | ImageType::Webp => 75,
         }
     }
 }
@@ -211,7 +208,7 @@ fn process_image_inner(b: bytes::Bytes, ops: ProcessOptions) -> Result<ImageOutp
     let img = auto_orient(&data, img);
     let (orig_width, orig_height) = img.dimensions();
 
-    let mut out_img = resize(img, ops.width, ops.height);
+    let mut out_img = resize(&img, ops.width, ops.height);
     let (width, height) = out_img.dimensions();
 
     if let Some(blur) = ops.blur {
@@ -222,9 +219,8 @@ fn process_image_inner(b: bytes::Bytes, ops: ProcessOptions) -> Result<ImageOutp
     let out_type = ops.out_type.unwrap_or_else(|| img_type.into());
     let quality = ops
         .quality
-        .map(|v| v.max(1).min(100))
-        .unwrap_or_else(|| out_type.default_quality());
-    let buf = encode_image(out_img, out_type, quality)?;
+        .map_or_else(|| out_type.default_quality(), |v| v.max(1).min(100));
+    let buf = encode_image(&out_img, out_type, quality)?;
 
     Ok(ImageOutput {
         buf: bytes::Bytes::from(buf),
@@ -258,7 +254,7 @@ fn decode_image(img_type: InputImageType, raw: &[u8]) -> Result<DynamicImage> {
 }
 
 fn decode_avif(raw: &[u8]) -> Result<DynamicImage> {
-    libavif_image::read(raw).map_err(|err| err.into())
+    libavif_image::read(raw).map_err(Into::into)
 }
 
 fn decode_jpeg(raw: &[u8]) -> Result<DynamicImage> {
@@ -267,11 +263,11 @@ fn decode_jpeg(raw: &[u8]) -> Result<DynamicImage> {
 }
 
 fn decode_png(raw: &[u8]) -> Result<DynamicImage> {
-    image::load_from_memory_with_format(raw, ImageFormat::Png).map_err(|err| err.into())
+    image::load_from_memory_with_format(raw, ImageFormat::Png).map_err(Into::into)
 }
 
 fn decode_tiff(raw: &[u8]) -> Result<DynamicImage> {
-    image::load_from_memory_with_format(raw, ImageFormat::Tiff).map_err(|err| err.into())
+    image::load_from_memory_with_format(raw, ImageFormat::Tiff).map_err(Into::into)
 }
 
 fn decode_webp(raw: &[u8]) -> Result<DynamicImage> {
@@ -299,8 +295,8 @@ fn auto_orient(data: &Option<exif::ExifData>, img: DynamicImage) -> DynamicImage
     img
 }
 
-fn resize(img: DynamicImage, width: Option<u32>, height: Option<u32>) -> DynamicImage {
-    let (width, height, should_crop) = get_img_dims(&img, width, height);
+fn resize(img: &DynamicImage, width: Option<u32>, height: Option<u32>) -> DynamicImage {
+    let (width, height, should_crop) = get_img_dims(img, width, height);
     if should_crop {
         let (orig_width, orig_height) = img.dimensions();
         let mut x = 0;
@@ -349,7 +345,7 @@ fn get_img_dims(img: &DynamicImage, width: Option<u32>, height: Option<u32>) -> 
     (orig_width, orig_height, false)
 }
 
-fn encode_image(img: DynamicImage, img_type: ImageType, quality: u32) -> Result<Vec<u8>> {
+fn encode_image(img: &DynamicImage, img_type: ImageType, quality: u32) -> Result<Vec<u8>> {
     match img_type {
         ImageType::Avif => encode_avif(img, quality),
         ImageType::Jpeg => encode_jpeg(img, quality),
@@ -359,21 +355,21 @@ fn encode_image(img: DynamicImage, img_type: ImageType, quality: u32) -> Result<
     }
 }
 
-fn encode_avif(img: DynamicImage, quality: u32) -> Result<Vec<u8>> {
+fn encode_avif(img: &DynamicImage, quality: u32) -> Result<Vec<u8>> {
     let mut out = Vec::with_capacity(1 << 15);
     let enc = AvifEncoder::new_with_speed_quality(&mut out, 8, quality as u8);
     img.write_with_encoder(enc)?;
     Ok(out)
 }
 
-fn encode_jpeg(img: DynamicImage, quality: u32) -> Result<Vec<u8>> {
+fn encode_jpeg(img: &DynamicImage, quality: u32) -> Result<Vec<u8>> {
     let quality = quality as i32;
     let out = match img {
         DynamicImage::ImageRgb8(img) => {
-            turbojpeg::compress_image(&img, quality, turbojpeg::Subsamp::Sub2x2)
+            turbojpeg::compress_image(img, quality, turbojpeg::Subsamp::Sub2x2)
         }
         DynamicImage::ImageRgba8(img) => {
-            turbojpeg::compress_image(&img, quality, turbojpeg::Subsamp::Sub2x2)
+            turbojpeg::compress_image(img, quality, turbojpeg::Subsamp::Sub2x2)
         }
         _ => return Err(anyhow!("unable to encode image as jpeg")),
     }?
@@ -381,20 +377,20 @@ fn encode_jpeg(img: DynamicImage, quality: u32) -> Result<Vec<u8>> {
     Ok(out)
 }
 
-fn encode_png(img: DynamicImage, _quality: u32) -> Result<Vec<u8>> {
+fn encode_png(img: &DynamicImage, _quality: u32) -> Result<Vec<u8>> {
     let mut out = Vec::with_capacity(1 << 15);
     img.write_with_encoder(PngEncoder::new(&mut out))?;
     Ok(out)
 }
 
-fn encode_tiff(img: DynamicImage, _quality: u32) -> Result<Vec<u8>> {
+fn encode_tiff(img: &DynamicImage, _quality: u32) -> Result<Vec<u8>> {
     let mut out = std::io::Cursor::new(Vec::with_capacity(1 << 15));
     img.write_with_encoder(TiffEncoder::new(&mut out))?;
     Ok(out.into_inner())
 }
 
-fn encode_webp(img: DynamicImage, quality: u32) -> Result<Vec<u8>> {
-    Ok(webp::Encoder::from_image(&img)
+fn encode_webp(img: &DynamicImage, quality: u32) -> Result<Vec<u8>> {
+    Ok(webp::Encoder::from_image(img)
         .map_err(|_| anyhow!("unable to encode image as webp"))?
         .encode_simple(false, quality as f32)
         .map_err(|err| anyhow!(format!("webp: {:?}", err)))?

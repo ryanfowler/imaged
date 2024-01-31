@@ -55,7 +55,7 @@ impl DiskCache {
     pub async fn set(&self, input: &str, ops: ProcessOptions, output: ImageOutput) -> Result<()> {
         let path = self.get_file_path(input, ops);
         let _permit = self.inner.sema.acquire().await?;
-        let added = task::spawn_blocking(move || Self::set_inner(path, output)).await??;
+        let added = task::spawn_blocking(move || Self::set_inner(&path, &output)).await??;
         self.inner.cur_size.fetch_add(added, Ordering::AcqRel);
         Ok(())
     }
@@ -80,14 +80,14 @@ impl DiskCache {
                 .min_depth(3)
                 .max_depth(3)
                 .into_iter()
-                .filter_map(|res| res.ok())
+                .filter_map(Result::ok)
                 .filter_map(|entry| entry.metadata().ok())
-                .filter(|meta| meta.is_file())
+                .filter(Metadata::is_file)
                 .map(|meta| meta.len())
                 .sum()
         })
         .await
-        .map_err(|err| err.into())
+        .map_err(Into::into)
     }
 
     async fn clean(&self) {
@@ -162,7 +162,7 @@ impl DiskCache {
             .min_depth(1)
             .max_depth(1)
             .into_iter()
-            .filter_map(|v| v.ok())
+            .filter_map(Result::ok)
             .filter(|v| v.file_type().is_file())
             .choose_multiple(rng, num)
     }
@@ -175,7 +175,7 @@ impl DiskCache {
             .min_depth(1)
             .max_depth(1)
             .into_iter()
-            .filter_map(|v| v.ok())
+            .filter_map(Result::ok)
             .filter(|v| v.file_type().is_dir())
             .choose_multiple(rng, num)
     }
@@ -206,17 +206,17 @@ impl DiskCache {
         Ok(Some(output))
     }
 
-    fn set_inner(path: PathBuf, output: ImageOutput) -> Result<u64> {
+    fn set_inner(path: &Path, output: &ImageOutput) -> Result<u64> {
         let raw: Vec<u8> = Vec::with_capacity(128);
         let mut cursor = Cursor::new(raw);
         _ = cursor.write(&[0, 0, 0, 0]);
         serde_json::to_writer(&mut cursor, &output)?;
-        let length = (cursor.position() - 4) as u32;
+        let length = u32::try_from(cursor.position() - 4).unwrap();
         cursor.set_position(0);
         _ = cursor.write(&length.to_be_bytes());
         let contents = cursor.into_inner();
 
-        let mut file = Self::create_file(&path)?;
+        let mut file = Self::create_file(path)?;
         file.write_all(&contents)?;
         file.write_all(&output.buf)?;
         file.flush()?;
@@ -225,7 +225,7 @@ impl DiskCache {
 
     fn get_file_path(&self, input: &str, ops: ProcessOptions) -> PathBuf {
         let hash = Self::get_hash(input, ops).to_hex();
-        let mut path = self.inner.dir.to_owned();
+        let mut path = self.inner.dir.clone();
         path.push(&hash.as_str()[hash.len() - 1..]);
         path.push(&hash.as_str()[hash.len() - 3..hash.len() - 1]);
         path.push(hash.as_str());
