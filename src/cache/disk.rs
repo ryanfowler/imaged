@@ -181,15 +181,17 @@ impl DiskCache {
     }
 
     fn get_inner(path: PathBuf) -> Result<Option<ImageOutput>> {
-        let data = match std::fs::read(path) {
-            Ok(data) => data,
-            Err(err) => {
-                if err.kind() == std::io::ErrorKind::NotFound {
-                    return Ok(None);
-                }
-                return Err(err.into());
+        let data = std::fs::read(path).map(Some).or_else(|err| {
+            if err.kind() == std::io::ErrorKind::NotFound {
+                Ok(None)
+            } else {
+                Err(err)
             }
+        })?;
+        let Some(data) = data else {
+            return Ok(None);
         };
+
         if data.len() < 4 {
             return Err(anyhow!("invalid cached file: size is too small"));
         }
