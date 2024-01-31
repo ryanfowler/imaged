@@ -16,7 +16,7 @@ impl Verifier {
         Ok(Verifier { keys })
     }
 
-    pub fn verify(&self, path: &str, query: Option<&str>, hex_sig: &[u8]) -> Result<bool> {
+    pub fn verify(&self, path: &str, query: Option<&str>, hex_sig: &[u8]) -> Result<()> {
         let msg = Self::get_message(path, query)
             .map_err(|err| anyhow!(format!("parsing query string: {}", err)))?;
         let sig = Self::parse_signature(hex_sig)
@@ -24,10 +24,11 @@ impl Verifier {
 
         for key in &self.keys {
             if key.verify(msg.as_bytes(), &sig).is_ok() {
-                return Ok(true);
+                return Ok(());
             }
         }
-        Ok(false)
+
+        Err(anyhow!("invalid signature provided"))
     }
 
     fn get_message(path: &str, query: Option<&str>) -> Result<String> {

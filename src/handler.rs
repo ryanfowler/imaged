@@ -62,11 +62,7 @@ impl Handler {
             return Err(anyhow!("signature must be provided"));
         };
 
-        if !verifier.verify(path, query, sig.as_bytes())? {
-            return Err(anyhow!("invalid signature provided"));
-        }
-
-        Ok(())
+        verifier.verify(path, query, sig.as_bytes())
     }
 
     /// This method has to return an Arc<Result<_>> because of the use of

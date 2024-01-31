@@ -126,7 +126,7 @@ async fn get_image(
 ) -> Response {
     let uri = request.uri();
     if let Err(err) = state.verify(uri.path(), uri.query(), query.s.as_deref()) {
-        return (StatusCode::BAD_REQUEST, err.to_string()).into_response();
+        return (StatusCode::UNAUTHORIZED, err.to_string()).into_response();
     }
 
     let result = state
