@@ -119,7 +119,7 @@ impl Handler {
             if let Ok(Some(output)) = output {
                 if let (Some(mem_cache), true) = (&self.mem_cache, should_cache) {
                     let start = SystemTime::now();
-                    mem_cache.set(url, options, output.to_owned());
+                    mem_cache.set(url, options, output.clone());
                     timing.push("mem_cache_put", start);
                 }
                 return Ok(ImageResponse {
@@ -188,7 +188,7 @@ impl Handler {
             return Err(anyhow!("received status code: {}", res.status()));
         }
 
-        res.bytes().await.map_err(|err| err.into())
+        res.bytes().await.map_err(Into::into)
     }
 }
 
@@ -199,7 +199,7 @@ pub enum CacheResult {
 }
 
 impl CacheResult {
-    pub fn as_str(&self) -> &'static str {
+    pub fn as_str(self) -> &'static str {
         match self {
             CacheResult::Hit => "HIT",
             CacheResult::Miss => "MISS",
@@ -226,10 +226,10 @@ impl ServerTiming {
     fn push(&mut self, name: &str, start: SystemTime) {
         if let Some(ref mut hdr) = self.hdr {
             if !hdr.is_empty() {
-                hdr.push(',')
+                hdr.push(',');
             }
             let dur = Self::ms_since(start);
-            _ = write!(hdr, "{};dur={:.1}", name, dur);
+            _ = write!(hdr, "{name};dur={dur:.1}");
         }
     }
 

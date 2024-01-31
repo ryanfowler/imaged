@@ -26,7 +26,7 @@ impl MemoryCache {
             .unwrap()
             .lru
             .get(&Key { input, options })
-            .map(|v| v.to_owned())
+            .map(ToOwned::to_owned)
     }
 
     pub fn set(&self, input: &str, options: ProcessOptions, output: ImageOutput) {

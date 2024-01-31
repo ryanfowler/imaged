@@ -1,4 +1,4 @@
-use std::{ops::Deref, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use axum::{
     body::Body,
@@ -70,7 +70,7 @@ async fn main() {
     };
 
     let verifier = verify_keys.map(|keys| {
-        Verifier::new(keys.split(',').map(|v| v.to_owned()))
+        Verifier::new(keys.split(',').map(ToOwned::to_owned))
             .expect("invalid verification key provided")
     });
 
@@ -98,7 +98,7 @@ async fn main() {
         .with_state(state);
 
     let port = port.unwrap_or_else(|| "8000".to_string());
-    let addr = format!("0.0.0.0:{}", port);
+    let addr = format!("0.0.0.0:{port}");
     let listener = TcpListener::bind(&addr).await.unwrap();
     println!("Starting server on {}", &addr);
     axum::serve(listener, app)
@@ -137,7 +137,7 @@ async fn get_image(
             !query.is_nocache(),
         )
         .await;
-    let result = match result.deref() {
+    let result = match &*result {
         Ok(res) => res,
         Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
     };
@@ -154,7 +154,7 @@ async fn get_image(
     }
 
     if let Some(cache_result) = result.cache_result {
-        res = res.header("x-cache-status", cache_result.as_str())
+        res = res.header("x-cache-status", cache_result.as_str());
     }
 
     res.header("x-image-height", result.output.height)

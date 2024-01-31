@@ -88,7 +88,7 @@ impl ExifData {
 
     fn get_exposure_time(&self) -> Option<String> {
         self.get_field_rational(Tag::ExposureTime)
-            .map(|(num, denom)| format!("{}/{}", num, denom))
+            .map(|(num, denom)| format!("{num}/{denom}"))
     }
 
     fn get_latitude(&self) -> Option<f64> {
@@ -105,7 +105,7 @@ impl ExifData {
                 }
                 v
             })
-            .map(|v| (100000.0 * v).round() / 100000.0)
+            .map(|v| (100_000.0 * v).round() / 100_000.0)
     }
 
     fn get_longitude(&self) -> Option<f64> {
@@ -122,7 +122,7 @@ impl ExifData {
                 }
                 v
             })
-            .map(|v| (100000.0 * v).round() / 100000.0)
+            .map(|v| (100_000.0 * v).round() / 100_000.0)
     }
 
     fn get_altitude(&self) -> Option<f64> {
@@ -155,7 +155,7 @@ impl ExifData {
         if let Some(field) = self.exif.get_field(tag, In::PRIMARY) {
             if let Value::Ascii(v) = &field.value {
                 if !v.is_empty() {
-                    return std::str::from_utf8(&v[0]).ok().map(|v| v.to_string());
+                    return std::str::from_utf8(&v[0]).ok().map(ToString::to_string);
                 }
             }
         }
@@ -182,7 +182,7 @@ impl ExifData {
     fn get_float64(&self, tag: Tag) -> Option<f64> {
         self.exif.get_field(tag, In::PRIMARY).and_then(|field| {
             if let exif::Value::Rational(v) = &field.value {
-                return v.first().map(|v| v.to_f64());
+                return v.first().map(exif::Rational::to_f64);
             }
             None
         })
