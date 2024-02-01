@@ -165,7 +165,13 @@ async fn get_image(
 async fn get_image_metadata(
     Query(query): Query<MetadataQuery>,
     State(state): State<Handler>,
+    request: Request,
 ) -> Response {
+    let uri = request.uri();
+    if let Err(err) = state.verify(uri.path(), uri.query(), query.s.as_deref()) {
+        return (StatusCode::UNAUTHORIZED, err.to_string()).into_response();
+    }
+
     let thumbhash = query.is_thumbhash();
     let result = match state.get_metadata(&query.url, thumbhash).await {
         Ok(res) => res,
@@ -279,6 +285,8 @@ struct MetadataQuery {
     thumbhash: Option<String>,
     #[serde(default)]
     timing: Option<String>,
+    #[serde(default)]
+    s: Option<String>,
 }
 
 impl MetadataQuery {
