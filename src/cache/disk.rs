@@ -211,7 +211,7 @@ impl DiskCache {
         let mut cursor = Cursor::new(raw);
         _ = cursor.write(&[0, 0, 0, 0]);
         serde_json::to_writer(&mut cursor, &output)?;
-        let length = u32::try_from(cursor.position() - 4).unwrap();
+        let length = u32::try_from(cursor.position() - 4)?;
         cursor.set_position(0);
         _ = cursor.write(&length.to_be_bytes());
         let contents = cursor.into_inner();
