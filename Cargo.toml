@@ -28,8 +28,8 @@ base64 = "0.21.6"
 blake3 = "1.5.0"
 byte-unit = { version = "5.1.4", features = ["byte"] }
 bytes = "1.5.0"
-ed25519-compact = "2.0.6"
 hex = "0.4.3"
+hmac = "0.12.1"
 image = { version = "0.24.8", default-features = false, features = ["avif-encoder", "png", "tiff"] }
 jemallocator = { version = "0.5.4" }
 kamadak-exif = "0.5.5"
@@ -41,6 +41,7 @@ reqwest = "0.11.24"
 serde = { version = "1.0.196", features = ["derive"] }
 serde_json = "1.0.113"
 serde_urlencoded = "0.7.1"
+sha2 = "0.10.8"
 thumbhash = "0.1.0"
 tokio = { version = "1.35.1", features = ["macros", "net", "rt", "signal", "sync", "time"] }
 turbojpeg = { version = "0.5.4", features = ["image"] }
