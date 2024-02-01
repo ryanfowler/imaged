@@ -133,7 +133,6 @@ async fn get_image(
         .get_image(
             &query.url,
             options_from_query(&query, &headers),
-            query.is_timing(),
             !query.is_nocache(),
         )
         .await;
@@ -167,16 +166,15 @@ async fn get_image_metadata(
     Query(query): Query<MetadataQuery>,
     State(state): State<Handler>,
 ) -> Response {
-    let timing = query.is_timing();
     let thumbhash = query.is_thumbhash();
-    let result = match state.get_metadata(&query.url, thumbhash, timing).await {
+    let result = match state.get_metadata(&query.url, thumbhash).await {
         Ok(res) => res,
         Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
     };
 
     let mut res = new_response().header("content-type", "application/json");
 
-    if result.timing.should_show() {
+    if query.is_timing() {
         res = res.header("server-timing", &result.timing.header());
     }
 

@@ -71,7 +71,6 @@ impl Handler {
         &self,
         url: &str,
         options: ProcessOptions,
-        timing: bool,
         should_cache: bool,
     ) -> Arc<Result<ImageResponse>> {
         let key = Key {
@@ -80,10 +79,7 @@ impl Handler {
         };
         self.group
             .run(&key, || async {
-                Arc::new(
-                    self.get_image_inner(url, options, timing, should_cache)
-                        .await,
-                )
+                Arc::new(self.get_image_inner(url, options, should_cache).await)
             })
             .await
     }
@@ -92,12 +88,11 @@ impl Handler {
         &self,
         url: &str,
         options: ProcessOptions,
-        timing: bool,
         should_cache: bool,
     ) -> Result<ImageResponse> {
         let _permit = self.semaphore.acquire().await?;
 
-        let mut timing = ServerTiming::new(timing);
+        let mut timing = ServerTiming::new();
 
         if let Some(cache) = &self.mem_cache {
             let start = SystemTime::now();
@@ -160,15 +155,10 @@ impl Handler {
         })
     }
 
-    pub async fn get_metadata(
-        &self,
-        url: &str,
-        thumbhash: bool,
-        timing: bool,
-    ) -> Result<MetadataResponse> {
+    pub async fn get_metadata(&self, url: &str, thumbhash: bool) -> Result<MetadataResponse> {
         let _permit = self.semaphore.acquire().await?;
 
-        let mut timing = ServerTiming::new(timing);
+        let mut timing = ServerTiming::new();
 
         let start = SystemTime::now();
         let body = self.get_orig_image(url).await?;
@@ -209,46 +199,42 @@ impl CacheResult {
 
 #[derive(Clone)]
 pub struct ServerTiming {
-    hdr: Option<String>,
+    vals: Vec<TimingValue>,
+}
+
+#[derive(Clone)]
+struct TimingValue {
+    name: &'static str,
+    dur: f32,
 }
 
 impl ServerTiming {
-    fn new(show_timing: bool) -> Self {
+    fn new() -> Self {
         Self {
-            hdr: if show_timing {
-                Some(String::new())
-            } else {
-                None
-            },
+            vals: Vec::with_capacity(6),
         }
     }
 
-    fn push(&mut self, name: &str, start: SystemTime) {
-        if let Some(ref mut hdr) = self.hdr {
-            if !hdr.is_empty() {
-                hdr.push(',');
-            }
-            let dur = Self::ms_since(start);
-            _ = write!(hdr, "{name};dur={dur:.1}");
-        }
-    }
-
-    pub fn should_show(&self) -> bool {
-        self.hdr.is_some()
+    fn push(&mut self, name: &'static str, start: SystemTime) {
+        let dur = Self::ms_since(start);
+        self.vals.push(TimingValue { name, dur });
     }
 
     pub fn header(&self) -> String {
-        if let Some(v) = &self.hdr {
-            v.to_owned()
-        } else {
-            String::new()
+        let mut out = String::with_capacity(128);
+        for val in &self.vals {
+            if !out.is_empty() {
+                out.push(',');
+            }
+            _ = write!(&mut out, "{};dur={:.1}", val.name, val.dur);
         }
+        out
     }
 
     fn ms_since(start: SystemTime) -> f32 {
         SystemTime::now()
             .duration_since(start)
-            .unwrap()
+            .unwrap_or_default()
             .as_secs_f32()
             * 1000.0
     }
