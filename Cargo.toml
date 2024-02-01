@@ -37,7 +37,7 @@ libavif-image = { version = "0.11.0", default-features = false, features = ["cod
 lru = "0.12.2"
 memchr = "2.7.1"
 rand = "0.8.5"
-reqwest = "0.11.23"
+reqwest = "0.11.24"
 serde = { version = "1.0.196", features = ["derive"] }
 serde_json = "1.0.113"
 serde_urlencoded = "0.7.1"
