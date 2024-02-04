@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use image::ImageProccessor;
+use serde::Deserialize;
 
 use crate::{
     cache::{disk::DiskCache, memory::MemoryCache},
@@ -19,25 +20,26 @@ mod singleflight;
 #[global_allocator]
 static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
+#[derive(Deserialize)]
+struct EnvConfig {
+    disk_cache_path: Option<String>,
+    disk_cache_size: Option<byte_unit::Byte>,
+    mem_cache_size: Option<byte_unit::Byte>,
+    port: Option<u16>,
+    verify_keys: Option<String>,
+}
+
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
-    let port = std::env::var("PORT").ok();
-    let mem_cache_size = std::env::var("MEM_CACHE_SIZE")
-        .ok()
-        .map(|v| byte_unit::Byte::parse_str(v, true).expect("invalid value for MEM_CACHE_SIZE"));
-    let disk_cache_size = std::env::var("DISK_CACHE_SIZE")
-        .ok()
-        .map(|v| byte_unit::Byte::parse_str(v, true).expect("invalid value for DISK_CACHE_SIZE"));
-    let disk_cache_path = std::env::var("DISK_CACHE_PATH").ok();
-    let verify_keys = std::env::var("VERIFY_KEYS").ok();
+    let config: EnvConfig = envy::from_env().unwrap();
 
-    if let Some(size) = mem_cache_size {
+    if let Some(size) = config.mem_cache_size {
         println!(
             "Using an in-memory cache of size {}",
             size.get_appropriate_unit(byte_unit::UnitType::Both)
         );
     }
-    if let (Some(size), Some(path)) = (disk_cache_size, &disk_cache_path) {
+    if let (Some(size), Some(path)) = (config.disk_cache_size, &config.disk_cache_path) {
         println!(
             "Using a disk cache of size {} at path {}",
             size.get_appropriate_unit(byte_unit::UnitType::Both),
@@ -45,17 +47,19 @@ async fn main() {
         );
     }
 
-    let mem_cache = mem_cache_size
+    let mem_cache = config
+        .mem_cache_size
         .map(|v| v.as_u64() as usize)
         .map(MemoryCache::new);
 
-    let disk_cache = if let (Some(size), Some(path)) = (disk_cache_size, disk_cache_path) {
-        Some(DiskCache::new(path.into(), size.as_u64()).await.unwrap())
-    } else {
-        None
-    };
+    let disk_cache =
+        if let (Some(size), Some(path)) = (config.disk_cache_size, config.disk_cache_path) {
+            Some(DiskCache::new(path.into(), size.as_u64()).await.unwrap())
+        } else {
+            None
+        };
 
-    let verifier = verify_keys.map(|keys| {
+    let verifier = config.verify_keys.map(|keys| {
         Verifier::new(keys.split(',').map(ToOwned::to_owned))
             .expect("invalid verification key provided")
     });
@@ -78,7 +82,7 @@ async fn main() {
         verifier,
     );
 
-    let port = port.unwrap_or_else(|| "8000".to_string());
+    let port = config.port.unwrap_or(8000);
     let addr = format!("0.0.0.0:{port}");
     server::start_server(state, &addr).await.unwrap();
 }
