@@ -1,11 +1,11 @@
 use std::time::Duration;
 
-use image::ImageProccessor;
 use serde::Deserialize;
 
 use crate::{
     cache::{disk::DiskCache, memory::MemoryCache},
     handler::Handler,
+    image::ImageProccessor,
     signature::Verifier,
 };
 
