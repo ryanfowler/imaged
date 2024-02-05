@@ -45,6 +45,6 @@ serde_urlencoded = "0.7.1"
 sha2 = "0.10.8"
 thumbhash = "0.1.0"
 tokio = { version = "1.36.0", features = ["macros", "net", "rt", "signal", "sync", "time"] }
-turbojpeg = { version = "0.5.4", features = ["image"] }
+turbojpeg = { version = "1.0.0", features = ["image"] }
 walkdir = "2.4.0"
 webp = "0.2.6"
