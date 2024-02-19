@@ -34,7 +34,7 @@ hmac = "0.12.1"
 image = { version = "0.24.8", default-features = false, features = ["avif-encoder", "png", "tiff"] }
 jemallocator = { version = "0.5.4" }
 kamadak-exif = "0.5.5"
-libavif-image = { version = "0.11.0", default-features = false, features = ["codec-dav1d"] }
+libavif-image = { version = "0.12.0", default-features = false, features = ["codec-dav1d"] }
 lru = "0.12.2"
 memchr = "2.7.1"
 rand = "0.8.5"
