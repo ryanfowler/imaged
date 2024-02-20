@@ -21,7 +21,7 @@ opt-level = 1
 opt-level = 2
 
 [dependencies]
-ahash = "0.8.8"
+ahash = "0.8.9"
 anyhow = "1.0.80"
 axum = { version = "0.7.4", features = ["query"] }
 base64 = "0.21.6"
