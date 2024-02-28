@@ -33,6 +33,10 @@ struct Inner {
 
 impl DiskCache {
     pub async fn new(path: PathBuf, max_size: u64) -> Result<Self> {
+        assert!(
+            max_size > 0,
+            "maximum bytes for disk cache must be greater than 0"
+        );
         let disk_cache = Self {
             inner: Arc::new(Inner {
                 dir: path.clone(),
@@ -98,13 +102,17 @@ impl DiskCache {
 
         let this = self.clone();
         task::spawn_blocking(move || loop {
-            let to_remove = cur_size - this.inner.max_size;
+            let to_remove = cur_size
+                .checked_sub(this.inner.max_size)
+                .expect("overflow calculating bytes to remove");
             let mut removed = 0;
             while removed < to_remove {
                 removed += this.remove_files(to_remove - removed);
             }
             let old = this.inner.cur_size.fetch_sub(removed, Ordering::AcqRel);
-            cur_size = old - removed;
+            cur_size = old
+                .checked_sub(removed)
+                .expect("overflow calculating current size");
             if cur_size <= this.inner.max_size {
                 return;
             }

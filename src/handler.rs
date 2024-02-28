@@ -42,6 +42,7 @@ impl Handler {
         concurrency: usize,
         verifier: Option<Verifier>,
     ) -> Self {
+        assert!(concurrency > 0);
         Self {
             mem_cache,
             disk_cache,

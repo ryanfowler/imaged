@@ -10,6 +10,10 @@ pub struct MemoryCache {
 
 impl MemoryCache {
     pub fn new(max_bytes: usize) -> Self {
+        assert!(
+            max_bytes > 0,
+            "maximum bytes for memory cache must be greater than 0"
+        );
         MemoryCache {
             mu: Mutex::new(Inner {
                 lru: LruCache::unbounded(),
@@ -34,11 +38,17 @@ impl MemoryCache {
         let mut guard = self.mu.lock().unwrap();
         guard.size += output.buf.len();
         if let Some(val) = guard.lru.put(Key { input, options }, output) {
-            guard.size -= val.buf.len();
+            guard.size = guard
+                .size
+                .checked_sub(val.buf.len())
+                .expect("overflow replacing item in memory lru");
         }
         while guard.size > guard.max {
             if let Some((_, val)) = guard.lru.pop_lru() {
-                guard.size -= val.buf.len();
+                guard.size = guard
+                    .size
+                    .checked_sub(val.buf.len())
+                    .expect("overflow removing from memory lru");
             } else {
                 return;
             }
