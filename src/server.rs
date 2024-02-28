@@ -30,7 +30,7 @@ pub async fn start_server(handler: Handler, addr: &str) -> Result<()> {
         .route("/metadata", routing::get(get_image_metadata))
         .with_state(state);
 
-    let listener = TcpListener::bind(&addr).await.unwrap();
+    let listener = TcpListener::bind(&addr).await?;
     println!("Starting server on {}", &addr);
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
@@ -262,12 +262,23 @@ impl ImageDebug {
 }
 
 fn options_from_query(query: &ImageQuery, headers: &HeaderMap) -> ProcessOptions {
+    let width = query
+        .width
+        .and_then(|width| if width == 0 { None } else { Some(width) });
+    let height = query
+        .height
+        .and_then(|height| if height == 0 { None } else { Some(height) });
+    let quality = query.quality.map(|quality| quality.max(1).min(100));
+    let blur = query
+        .blur
+        .and_then(|blur| if blur == 0 { None } else { Some(blur) });
+
     let accept = headers.get("accept");
     ProcessOptions {
-        width: query.width,
-        height: query.height,
+        width,
+        height,
         out_type: query.format.as_ref().and_then(|v| v.format(accept)),
-        quality: query.quality,
-        blur: query.blur,
+        quality,
+        blur,
     }
 }

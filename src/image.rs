@@ -297,6 +297,9 @@ fn auto_orient(data: &Option<exif::ExifData>, img: DynamicImage) -> DynamicImage
 
 fn resize(img: &DynamicImage, width: Option<u32>, height: Option<u32>) -> DynamicImage {
     let (width, height, should_crop) = get_img_dims(img, width, height);
+    assert!(width > 0, "width must be greater than 0");
+    assert!(height > 0, "height must be greater than 0");
+
     if should_crop {
         let (orig_width, orig_height) = img.dimensions();
         let mut x = 0;
