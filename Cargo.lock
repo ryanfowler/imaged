@@ -845,6 +845,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "image"
+version = "0.25.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd54d660e773627692c524beaad361aca785a4f9f5730ce91f42aabe5bce3d11"
+dependencies = [
+ "bytemuck",
+ "byteorder",
+ "num-traits",
+]
+
+[[package]]
 name = "imaged"
 version = "0.1.0"
 dependencies = [
@@ -858,7 +869,7 @@ dependencies = [
  "envy",
  "hex",
  "hmac",
- "image",
+ "image 0.24.9",
  "jemallocator",
  "kamadak-exif",
  "libavif-image",
@@ -995,11 +1006,11 @@ dependencies = [
 
 [[package]]
 name = "libavif-image"
-version = "0.12.0"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d77d358bef9ea07eeced62c3c4209b62bc68fb19b811b3598daf26daa82b2e7"
+checksum = "56c640fa0f324e93e55a6bc8ee62cc63cb0a77376c021676236771d7ee4aa82a"
 dependencies = [
- "image",
+ "image 0.25.1",
  "libavif",
 ]
 
@@ -2216,7 +2227,7 @@ version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "291e4517c03ca0b7a6fc7b69a9c5a0034e268de7b5a4ddf21d26dcc4c9cbadaa"
 dependencies = [
- "image",
+ "image 0.24.9",
  "libc",
  "thiserror",
  "turbojpeg-sys",
@@ -2420,7 +2431,7 @@ version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4bb5d8e7814e92297b0e1c773ce43d290bef6c17452dafd9fc49e5edb5beba71"
 dependencies = [
- "image",
+ "image 0.24.9",
  "libwebp-sys",
 ]
 
