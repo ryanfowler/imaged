@@ -258,7 +258,7 @@ fn decode_avif(raw: &[u8]) -> Result<DynamicImage> {
 }
 
 fn decode_jpeg(raw: &[u8]) -> Result<DynamicImage> {
-    let img: image::RgbImage = turbojpeg::decompress_image(raw)?;
+    let img: image::RgbImage = decompress_jpeg_internal(raw)?;
     Ok(image::DynamicImage::from(img))
 }
 
@@ -369,10 +369,10 @@ fn encode_jpeg(img: &DynamicImage, quality: u32) -> Result<Vec<u8>> {
     let quality = quality as i32;
     let out = match img {
         DynamicImage::ImageRgb8(img) => {
-            turbojpeg::compress_image(img, quality, turbojpeg::Subsamp::Sub2x2)
+            compress_jpeg_internal(img, quality, turbojpeg::Subsamp::Sub2x2)
         }
         DynamicImage::ImageRgba8(img) => {
-            turbojpeg::compress_image(img, quality, turbojpeg::Subsamp::Sub2x2)
+            compress_jpeg_internal(img, quality, turbojpeg::Subsamp::Sub2x2)
         }
         _ => return Err(anyhow!("unable to encode image as jpeg")),
     }?
@@ -431,4 +431,72 @@ fn get_thumbhash(mut img: DynamicImage) -> String {
     let rgba = img.to_rgba8().into_raw();
     let hash = thumbhash::rgba_to_thumb_hash(width as usize, height as usize, &rgba);
     STANDARD.encode(hash)
+}
+
+// Copied from turbojpeg source in order to use our own version of the image crate.
+
+pub fn decompress_jpeg_internal<P>(jpeg_data: &[u8]) -> Result<image::ImageBuffer<P, Vec<u8>>>
+where
+    P: JpegPixel + 'static,
+{
+    let mut decompressor = turbojpeg::Decompressor::new()?;
+    let header = decompressor.read_header(jpeg_data)?;
+
+    let pitch = header.width * P::PIXEL_FORMAT.size();
+    let mut image_data = vec![0; pitch * header.height];
+    let image = turbojpeg::Image {
+        pixels: &mut image_data[..],
+        width: header.width,
+        pitch,
+        height: header.height,
+        format: P::PIXEL_FORMAT,
+    };
+    decompressor.decompress(jpeg_data, image)?;
+
+    let image_buf =
+        image::ImageBuffer::from_raw(header.width as u32, header.height as u32, image_data)
+            .unwrap();
+    Ok(image_buf)
+}
+
+pub fn compress_jpeg_internal<P>(
+    image_buf: &image::ImageBuffer<P, Vec<u8>>,
+    quality: i32,
+    subsamp: turbojpeg::Subsamp,
+) -> Result<turbojpeg::OwnedBuf>
+where
+    P: JpegPixel + 'static,
+{
+    let (width, height) = image_buf.dimensions();
+    let format = P::PIXEL_FORMAT;
+    let image = turbojpeg::Image {
+        pixels: &image_buf.as_raw()[..],
+        width: width as usize,
+        pitch: format.size() * width as usize,
+        height: height as usize,
+        format,
+    };
+
+    let mut compressor = turbojpeg::Compressor::new()?;
+    compressor.set_quality(quality)?;
+    compressor.set_subsamp(subsamp)?;
+    Ok(compressor.compress_to_owned(image)?)
+}
+
+/// Trait implemented for [`image::Pixel`s][image::Pixel] that correspond to a [`PixelFormat`] supported
+/// by TurboJPEG.
+#[cfg_attr(docsrs, doc(cfg(feature = "image")))]
+pub trait JpegPixel: image::Pixel<Subpixel = u8> {
+    /// The TurboJPEG pixel format that corresponds to this pixel type.
+    const PIXEL_FORMAT: turbojpeg::PixelFormat;
+}
+
+impl JpegPixel for image::Rgb<u8> {
+    const PIXEL_FORMAT: turbojpeg::PixelFormat = turbojpeg::PixelFormat::RGB;
+}
+impl JpegPixel for image::Rgba<u8> {
+    const PIXEL_FORMAT: turbojpeg::PixelFormat = turbojpeg::PixelFormat::RGBA;
+}
+impl JpegPixel for image::Luma<u8> {
+    const PIXEL_FORMAT: turbojpeg::PixelFormat = turbojpeg::PixelFormat::GRAY;
 }
