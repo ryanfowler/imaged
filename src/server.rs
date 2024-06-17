@@ -268,7 +268,7 @@ fn options_from_query(query: &ImageQuery, headers: &HeaderMap) -> ProcessOptions
     let height = query
         .height
         .and_then(|height| if height == 0 { None } else { Some(height) });
-    let quality = query.quality.map(|quality| quality.max(1).min(100));
+    let quality = query.quality.map(|quality| quality.clamp(1, 100));
     let blur = query
         .blur
         .and_then(|blur| if blur == 0 { None } else { Some(blur) });

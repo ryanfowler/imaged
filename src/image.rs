@@ -219,7 +219,7 @@ fn process_image_inner(b: bytes::Bytes, ops: ProcessOptions) -> Result<ImageOutp
     let out_type = ops.out_type.unwrap_or_else(|| img_type.into());
     let quality = ops
         .quality
-        .map_or_else(|| out_type.default_quality(), |v| v.max(1).min(100));
+        .map_or_else(|| out_type.default_quality(), |v| v.clamp(1, 100));
     let buf = encode_image(&out_img, out_type, quality)?;
 
     Ok(ImageOutput {
