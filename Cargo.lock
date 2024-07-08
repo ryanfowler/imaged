@@ -990,18 +990,18 @@ dependencies = [
 
 [[package]]
 name = "libavif"
-version = "0.13.0"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e307eb041038a7a1b4fefe41d098a691ea1c3c111d58e0e21cc4fc304409a66f"
+checksum = "0b710faf0de92da0e32a9a9c89bbf849e37277fd447b4f17b0f0f798796ae1f2"
 dependencies = [
  "libavif-sys",
 ]
 
 [[package]]
 name = "libavif-image"
-version = "0.13.0"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56c640fa0f324e93e55a6bc8ee62cc63cb0a77376c021676236771d7ee4aa82a"
+checksum = "b0a6b5ea7c9d9260fa57daa8f238992de5d9c7a3c82a78e8dbc4d1367e7c28be"
 dependencies = [
  "image",
  "libavif",
@@ -1009,9 +1009,9 @@ dependencies = [
 
 [[package]]
 name = "libavif-sys"
-version = "0.16.0+libavif.1.0.4"
+version = "0.17.0+libavif.1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7eb05b7f9437ad312ad3dec250781fc95df54d4a1ec69d8b6cf5d503c5f5a51d"
+checksum = "490ca74b61e773140bebb086c81facb23273a99364a9ab0c92ab1532b90ade35"
 dependencies = [
  "cmake",
  "libc",
