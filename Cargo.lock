@@ -1026,9 +1026,9 @@ checksum = "97b3888a4aecf77e811145cadf6eef5901f4782c53886191b2f693f24761847c"
 
 [[package]]
 name = "libdav1d-sys"
-version = "0.7.0+libdav1d.1.4.0"
+version = "0.7.1+libdav1d.1.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0de922cdce0f7aca62567c9c454cbf49e5b1a7a79a10f97a3130547692aca71"
+checksum = "3d875e9669d116a603412a126de599b7bf47789a365b79fcf461fbf9c18d141f"
 dependencies = [
  "libc",
 ]
