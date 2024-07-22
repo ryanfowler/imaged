@@ -31,7 +31,7 @@ bytes = "1.6.1"
 envy = "0.4.2"
 hex = "0.4.3"
 hmac = "0.12.1"
-image = { version = "0.25.1", default-features = false, features = ["avif", "png", "tiff"] }
+image = { version = "0.25.2", default-features = false, features = ["avif", "png", "tiff"] }
 jemallocator = { version = "0.5.4" }
 kamadak-exif = "0.5.5"
 libavif-image = { version = "0.14.0", default-features = false, features = ["codec-dav1d"] }
