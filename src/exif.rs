@@ -97,7 +97,7 @@ impl ExifData {
                 if let Some(field) = self.exif.get_field(Tag::GPSLatitudeRef, In::PRIMARY) {
                     if let exif::Value::Ascii(n) = &field.value {
                         if let Some(s) = n.first() {
-                            if s.starts_with(&[b'S']) {
+                            if s.starts_with(b"S") {
                                 return v * -1.0;
                             }
                         }
@@ -114,7 +114,7 @@ impl ExifData {
                 if let Some(field) = self.exif.get_field(Tag::GPSLongitudeRef, In::PRIMARY) {
                     if let exif::Value::Ascii(n) = &field.value {
                         if let Some(s) = n.first() {
-                            if s.starts_with(&[b'W']) {
+                            if s.starts_with(b"W") {
                                 return v * -1.0;
                             }
                         }
