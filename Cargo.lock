@@ -2235,9 +2235,9 @@ dependencies = [
 
 [[package]]
 name = "turbojpeg-sys"
-version = "1.0.0"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3fa6daade3b979fb7454cce5ebcb9772ce7a1cf476ea27ed20ed06e13d9bc983"
+checksum = "fa5ad44e833ec12ba5bb5d2b9df3c438a5c2894b3709df3bd566219bd5984221"
 dependencies = [
  "anyhow",
  "cmake",
