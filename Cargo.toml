@@ -35,7 +35,7 @@ image = { version = "0.25.2", default-features = false, features = ["avif", "png
 jemallocator = { version = "0.5.4" }
 kamadak-exif = "0.5.5"
 libavif-image = { version = "0.14.0", default-features = false, features = ["codec-dav1d"] }
-lru = "0.12.4"
+lru = "0.12.5"
 memchr = "2.7.4"
 rand = "0.8.5"
 reqwest = "0.12.8"
