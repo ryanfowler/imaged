@@ -22,7 +22,7 @@ opt-level = 2
 
 [dependencies]
 ahash = "0.8.11"
-anyhow = "1.0.89"
+anyhow = "1.0.90"
 axum = { version = "0.7.7", features = ["query"] }
 base64 = "0.22.1"
 blake3 = "1.5.4"
