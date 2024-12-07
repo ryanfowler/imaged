@@ -78,7 +78,7 @@ struct Guard<'a, K: Hash + Eq, T> {
     inner: &'a Mutex<AHashMap<K, Receiver<Option<T>>>>,
 }
 
-impl<'a, K: Hash + Eq, T> Drop for Guard<'a, K, T> {
+impl<K: Hash + Eq, T> Drop for Guard<'_, K, T> {
     fn drop(&mut self) {
         self.inner.lock().unwrap().remove(self.key);
     }
