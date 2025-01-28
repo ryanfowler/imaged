@@ -147,7 +147,7 @@ impl DiskCache {
     fn get_random_entries(root: &Path) -> Vec<DirEntry> {
         let mut entries: Vec<DirEntry> = Vec::with_capacity(50);
 
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         for first in Self::get_random_dirs(root, &mut rng, 16) {
             for second in Self::get_random_dirs(first.path(), &mut rng, 16 * 16) {
                 let num = entries.capacity() - entries.len();
