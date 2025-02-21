@@ -3,16 +3,16 @@ use std::{
     io::{Cursor, Write},
     path::{Path, PathBuf},
     sync::{
-        atomic::{AtomicU64, Ordering},
         Arc,
+        atomic::{AtomicU64, Ordering},
     },
     time::{Duration, SystemTime},
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use blake3::{Hash, Hasher};
 use bytes::Bytes;
-use rand::{seq::IteratorRandom, Rng};
+use rand::{Rng, seq::IteratorRandom};
 use serde::Serialize;
 use tokio::{sync::Semaphore, task, time};
 use walkdir::{DirEntry, WalkDir};
@@ -101,20 +101,22 @@ impl DiskCache {
         }
 
         let this = self.clone();
-        task::spawn_blocking(move || loop {
-            let to_remove = cur_size
-                .checked_sub(this.inner.max_size)
-                .expect("overflow calculating bytes to remove");
-            let mut removed = 0;
-            while removed < to_remove {
-                removed += this.remove_files(to_remove - removed);
-            }
-            let old = this.inner.cur_size.fetch_sub(removed, Ordering::AcqRel);
-            cur_size = old
-                .checked_sub(removed)
-                .expect("overflow calculating current size");
-            if cur_size <= this.inner.max_size {
-                return;
+        task::spawn_blocking(move || {
+            loop {
+                let to_remove = cur_size
+                    .checked_sub(this.inner.max_size)
+                    .expect("overflow calculating bytes to remove");
+                let mut removed = 0;
+                while removed < to_remove {
+                    removed += this.remove_files(to_remove - removed);
+                }
+                let old = this.inner.cur_size.fetch_sub(removed, Ordering::AcqRel);
+                cur_size = old
+                    .checked_sub(removed)
+                    .expect("overflow calculating current size");
+                if cur_size <= this.inner.max_size {
+                    return;
+                }
             }
         })
         .await
