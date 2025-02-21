@@ -1,11 +1,11 @@
 use std::fmt::Display;
 
-use anyhow::{anyhow, Result};
-use base64::{engine::general_purpose::STANDARD, Engine as _};
+use anyhow::{Result, anyhow};
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use image::{
+    DynamicImage, GenericImageView, ImageError, ImageFormat, ImageResult,
     codecs::{avif::AvifEncoder, png::PngEncoder, tiff::TiffEncoder},
     error::{ImageFormatHint, UnsupportedError, UnsupportedErrorKind},
-    DynamicImage, GenericImageView, ImageError, ImageFormat, ImageResult,
 };
 use serde::{Deserialize, Serialize};
 use tokio::sync::Semaphore;

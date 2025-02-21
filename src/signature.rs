@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use hex::decode;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;

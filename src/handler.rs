@@ -1,6 +1,6 @@
 use std::{fmt::Write, sync::Arc, time::SystemTime};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use reqwest::Client;
 use tokio::sync::Semaphore;
 

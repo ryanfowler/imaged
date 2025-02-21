@@ -44,13 +44,16 @@ impl MemoryCache {
                 .expect("overflow replacing item in memory lru");
         }
         while guard.size > guard.max {
-            if let Some((_, val)) = guard.lru.pop_lru() {
-                guard.size = guard
-                    .size
-                    .checked_sub(val.buf.len())
-                    .expect("overflow removing from memory lru");
-            } else {
-                return;
+            match guard.lru.pop_lru() {
+                Some((_, val)) => {
+                    guard.size = guard
+                        .size
+                        .checked_sub(val.buf.len())
+                        .expect("overflow removing from memory lru");
+                }
+                _ => {
+                    return;
+                }
             }
         }
     }

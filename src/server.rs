@@ -4,14 +4,14 @@ use anyhow::Result;
 use axum::{
     body::Body,
     extract::{Query, Request, State},
-    http::{response::Builder, HeaderMap, HeaderValue, StatusCode},
+    http::{HeaderMap, HeaderValue, StatusCode, response::Builder},
     response::{IntoResponse, Response},
     routing,
 };
 use serde::{Deserialize, Serialize};
 use tokio::{
     net::TcpListener,
-    signal::unix::{signal, SignalKind},
+    signal::unix::{SignalKind, signal},
 };
 
 use crate::{
@@ -166,11 +166,7 @@ impl ImageQuery {
     }
 
     fn is_enabled(v: &Option<String>) -> bool {
-        if let Some(v) = v {
-            v != "false"
-        } else {
-            false
-        }
+        if let Some(v) = v { v != "false" } else { false }
     }
 }
 
@@ -234,11 +230,7 @@ impl MetadataQuery {
     }
 
     fn is_enabled(v: &Option<String>) -> bool {
-        if let Some(v) = v {
-            v != "false"
-        } else {
-            false
-        }
+        if let Some(v) = v { v != "false" } else { false }
     }
 }
 

@@ -1,7 +1,7 @@
 use std::{borrow::ToOwned, cmp::Eq, future::Future, hash::Hash, sync::Mutex};
 
 use ahash::AHashMap;
-use tokio::sync::watch::{channel, Receiver, Sender};
+use tokio::sync::watch::{Receiver, Sender, channel};
 
 #[derive(Debug, Default)]
 pub struct Group<K, T> {
@@ -54,16 +54,17 @@ where
     #[inline]
     fn get_state(&'a self, key: &'a K) -> State<'a, K, T> {
         let mut mu = self.inner.lock().unwrap();
-        if let Some(value) = mu.get(key) {
-            State::Receiver(value.clone())
-        } else {
-            let (tx, rx) = channel(None);
-            mu.insert(key.to_owned(), rx);
-            let guard = Guard {
-                key,
-                inner: &self.inner,
-            };
-            State::Sender((tx, guard))
+        match mu.get(key) {
+            Some(value) => State::Receiver(value.clone()),
+            _ => {
+                let (tx, rx) = channel(None);
+                mu.insert(key.to_owned(), rx);
+                let guard = Guard {
+                    key,
+                    inner: &self.inner,
+                };
+                State::Sender((tx, guard))
+            }
         }
     }
 }
