@@ -2367,9 +2367,9 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "turbojpeg"
-version = "1.3.0"
+version = "1.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "085de14aca773db834cf3827c6f25e1e806ca4aa26d319026b81a7e9a3ef3af1"
+checksum = "add821fe8f0bfdb54ee3875b44f477bce72f4b4f01d9dab1d624e46eae0ab00f"
 dependencies = [
  "gcd",
  "libc",
