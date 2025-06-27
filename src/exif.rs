@@ -98,7 +98,7 @@ impl ExifData {
                     if let exif::Value::Ascii(n) = &field.value {
                         if let Some(s) = n.first() {
                             if s.starts_with(b"S") {
-                                return v * -1.0;
+                                return -v;
                             }
                         }
                     }
@@ -115,7 +115,7 @@ impl ExifData {
                     if let exif::Value::Ascii(n) = &field.value {
                         if let Some(s) = n.first() {
                             if s.starts_with(b"W") {
-                                return v * -1.0;
+                                return -v;
                             }
                         }
                     }
@@ -129,7 +129,7 @@ impl ExifData {
         self.get_float64(Tag::GPSAltitude)
             .map(|v| {
                 if let Some(1) = self.get_field_u32(Tag::GPSAltitudeRef) {
-                    v * -1.0
+                    -v
                 } else {
                     v
                 }
