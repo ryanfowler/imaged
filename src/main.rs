@@ -18,7 +18,7 @@ mod signature;
 mod singleflight;
 
 #[global_allocator]
-static GLOBAL: jemallocator::Jemalloc = jemallocator::Jemalloc;
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 #[derive(Deserialize)]
 struct EnvConfig {
