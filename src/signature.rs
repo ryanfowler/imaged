@@ -20,7 +20,7 @@ impl Verifier {
 
     pub fn verify(&self, path: &str, query: Option<&str>, hex_sig: &[u8]) -> Result<()> {
         let msg = Self::get_message(path, query)
-            .map_err(|err| anyhow!(format!("parsing query string: {}", err)))?;
+            .map_err(|err| anyhow!(format!("parsing query string: {err}")))?;
 
         let sig = decode(hex_sig).map_err(|_| anyhow!("invalid hex signature"))?;
         for key in &self.keys {

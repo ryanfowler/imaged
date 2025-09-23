@@ -396,7 +396,7 @@ fn encode_webp(img: &DynamicImage, quality: u32) -> Result<Vec<u8>> {
     Ok(webp::Encoder::from_image(img)
         .map_err(|_| anyhow!("unable to encode image as webp"))?
         .encode_simple(false, quality as f32)
-        .map_err(|err| anyhow!(format!("webp: {:?}", err)))?
+        .map_err(|err| anyhow!(format!("webp: {err:?}")))?
         .to_owned())
 }
 
