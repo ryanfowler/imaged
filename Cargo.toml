@@ -31,7 +31,7 @@ bytes = "1.11.0"
 envy = "0.4.2"
 hex = "0.4.3"
 hmac = "0.12.1"
-image = { version = "0.25.8", default-features = false, features = ["avif", "png", "tiff"] }
+image = { version = "0.25.9", default-features = false, features = ["avif", "png", "tiff"] }
 kamadak-exif = "0.6.1"
 libavif-image = { version = "0.14.0", default-features = false, features = ["codec-dav1d"] }
 lru = "0.16.2"
