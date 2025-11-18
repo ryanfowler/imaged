@@ -23,7 +23,7 @@ opt-level = 2
 [dependencies]
 ahash = "0.8.11"
 anyhow = "1.0.100"
-axum = { version = "0.8.6", features = ["query"] }
+axum = { version = "0.8.7", features = ["query"] }
 base64 = "0.22.1"
 blake3 = "1.8.2"
 byte-unit = { version = "5.1.6", features = ["byte", "serde"] }
