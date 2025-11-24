@@ -26,7 +26,7 @@ anyhow = "1.0.100"
 axum = { version = "0.8.7", features = ["query"] }
 base64 = "0.22.1"
 blake3 = "1.8.2"
-byte-unit = { version = "5.1.6", features = ["byte", "serde"] }
+byte-unit = { version = "5.2.0", features = ["byte", "serde"] }
 bytes = "1.11.0"
 envy = "0.4.2"
 hex = "0.4.3"
