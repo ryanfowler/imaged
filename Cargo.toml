@@ -29,6 +29,7 @@ blake3 = "1.8.2"
 byte-unit = { version = "5.2.0", features = ["byte", "serde"] }
 bytes = "1.11.0"
 envy = "0.4.2"
+fast_image_resize = { version = "5.4.0", features = ["image"] }
 hex = "0.4.3"
 hmac = "0.12.1"
 image = { version = "0.25.9", default-features = false, features = ["avif", "png", "tiff"] }
