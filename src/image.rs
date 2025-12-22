@@ -1,7 +1,8 @@
 use std::fmt::Display;
 
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
+use fast_image_resize::{ResizeOptions, Resizer};
 use image::{
     DynamicImage, GenericImageView, ImageError, ImageFormat, ImageResult,
     codecs::{avif::AvifEncoder, png::PngEncoder, tiff::TiffEncoder},
@@ -208,7 +209,7 @@ fn process_image_inner(b: bytes::Bytes, ops: ProcessOptions) -> Result<ImageOutp
     let img = auto_orient(&data, img);
     let (orig_width, orig_height) = img.dimensions();
 
-    let mut out_img = resize(&img, ops.width, ops.height);
+    let mut out_img = resize(img, ops.width, ops.height)?;
     let (width, height) = out_img.dimensions();
 
     if let Some(blur) = ops.blur {
@@ -295,57 +296,54 @@ fn auto_orient(data: &Option<exif::ExifData>, img: DynamicImage) -> DynamicImage
     img
 }
 
-fn resize(img: &DynamicImage, width: Option<u32>, height: Option<u32>) -> DynamicImage {
-    let (width, height, should_crop) = get_img_dims(img, width, height);
-    assert!(width > 0, "width must be greater than 0");
-    assert!(height > 0, "height must be greater than 0");
-
-    if should_crop {
-        let (orig_width, orig_height) = img.dimensions();
-        let mut x = 0;
-        let mut y = 0;
-        let mut crop_width = orig_width;
-        let mut crop_height = orig_height;
-
-        let orig_aspect_ratio = orig_width as f32 / orig_height as f32;
-        let crop_aspect_ratio = width as f32 / height as f32;
-        if orig_aspect_ratio > crop_aspect_ratio {
-            crop_width = (crop_aspect_ratio * orig_height as f32).round() as u32;
-            x = ((orig_width - crop_width) as f32 / 2.0).round() as u32;
-        } else {
-            crop_height = (orig_width as f32 / crop_aspect_ratio).round() as u32;
-            y = ((orig_height - crop_height) as f32 / 2.0).round() as u32;
+fn resize(img: DynamicImage, width: Option<u32>, height: Option<u32>) -> Result<DynamicImage> {
+    // Calculate new width and height.
+    let (orig_width, orig_height) = img.dimensions();
+    let (width, height, should_crop) = match (width, height) {
+        (Some(width), Some(height)) => {
+            if width == orig_width && height == orig_height {
+                return Ok(img);
+            }
+            (width, height, true)
         }
+        (Some(width), None) => (width, mul_div_round(width, orig_height, orig_width)?, false),
+        (None, Some(height)) => (
+            mul_div_round(height, orig_width, orig_height)?,
+            height,
+            false,
+        ),
+        (None, None) => {
+            return Ok(img);
+        }
+    };
 
-        img.crop_imm(x, y, crop_width, crop_height)
-            .thumbnail_exact(width, height)
-    } else {
-        img.thumbnail(width, height)
+    let mut out = DynamicImage::new(width, height, img.color());
+    let mut resizer = Resizer::new();
+    let mut ops = ResizeOptions::new();
+    if should_crop {
+        ops = ops.fit_into_destination(Some((0.5, 0.5)));
     }
+    resizer.resize(&img, &mut out, &ops)?;
+
+    Ok(out)
 }
 
-fn get_img_dims(img: &DynamicImage, width: Option<u32>, height: Option<u32>) -> (u32, u32, bool) {
-    if let (Some(width), Some(height)) = (width, height) {
-        return (width, height, true);
+/// Computes round(a * b / c) using u64 to avoid overflow.
+/// Returns Err on division by zero or if result doesn't fit u32.
+#[inline]
+fn mul_div_round(a: u32, b: u32, c: u32) -> Result<u32> {
+    if c == 0 {
+        return Err(anyhow!("division by zero"));
     }
+    let a = a as u64;
+    let b = b as u64;
+    let c = c as u64;
 
-    let (orig_width, orig_height) = img.dimensions();
+    // round-to-nearest: (a*b + c/2) / c
+    let num = a.saturating_mul(b).saturating_add(c / 2);
+    let out = num / c;
 
-    if let Some(width) = width {
-        if width >= orig_width {
-            return (orig_width, orig_height, false);
-        }
-        return (width, orig_height, false);
-    }
-
-    if let Some(height) = height {
-        if height >= orig_height {
-            return (orig_width, orig_height, false);
-        }
-        return (orig_width, height, false);
-    }
-
-    (orig_width, orig_height, false)
+    u32::try_from(out).context("dimension overflow")
 }
 
 fn encode_image(img: &DynamicImage, img_type: ImageType, quality: u32) -> Result<Vec<u8>> {
@@ -360,7 +358,7 @@ fn encode_image(img: &DynamicImage, img_type: ImageType, quality: u32) -> Result
 
 fn encode_avif(img: &DynamicImage, quality: u32) -> Result<Vec<u8>> {
     let mut out = Vec::with_capacity(1 << 15);
-    let enc = AvifEncoder::new_with_speed_quality(&mut out, 8, quality as u8);
+    let enc = AvifEncoder::new_with_speed_quality(&mut out, 9, quality as u8);
     img.write_with_encoder(enc)?;
     Ok(out)
 }
