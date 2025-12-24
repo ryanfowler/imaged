@@ -1,0 +1,26 @@
+{
+  "name": "imaged",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "format": "bunx prettier . --write"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "node-addon-api": "8.5.0",
+    "node-gyp": "12.1.0",
+    "prettier": "3.7.4"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "exif-reader": "2.0.3",
+    "sharp": "^0.34.5",
+    "thumbhash": "0.1.1"
+  },
+  "trustedDependencies": [
+    "sharp"
+  ]
+}
