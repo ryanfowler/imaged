@@ -202,8 +202,8 @@ impl ImageProccessor {
 
 fn process_image_inner(b: bytes::Bytes, ops: ProcessOptions) -> Result<ImageOutput> {
     let body = b.as_ref();
-    let data = exif::ExifData::new(body);
     let img_type = type_from_raw(body)?;
+    let data = exif::ExifData::new(body);
 
     let img = decode_image(img_type, body)?;
     let img = auto_orient(&data, img);
@@ -400,23 +400,19 @@ fn encode_webp(img: &DynamicImage, quality: u32) -> Result<Vec<u8>> {
 
 fn metadata_inner(buf: bytes::Bytes, ops: MetadataOptions) -> Result<ImageMetadata> {
     let format = type_from_raw(&buf)?;
-    let exif_data = exif::ExifData::new(&buf);
+    let edata = exif::ExifData::new(&buf);
     let img = decode_image(format, &buf)?;
-    let img = auto_orient(&exif_data, img);
+    let img = auto_orient(&edata, img);
     let (width, height) = img.dimensions();
-    let hash = if ops.thumbhash {
-        Some(get_thumbhash(img))
-    } else {
-        None
-    };
+    let thumbhash = ops.thumbhash.then(|| get_thumbhash(img));
 
     Ok(ImageMetadata {
         format,
         width,
         height,
         size: buf.len() as u64,
-        thumbhash: hash,
-        data: exif_data.map(|exif_data| exif_data.get_data()),
+        thumbhash,
+        data: edata.map(|edata| edata.get_data()),
     })
 }
 
