@@ -1,0 +1,3 @@
+[env]
+SYSTEM_DEPS_LINK = "static"
+SYSTEM_DEPS_DAV1D_BUILD_INTERNAL = "always"

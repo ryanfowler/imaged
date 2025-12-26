@@ -255,7 +255,7 @@ fn decode_image(img_type: InputImageType, raw: &[u8]) -> Result<DynamicImage> {
 }
 
 fn decode_avif(raw: &[u8]) -> Result<DynamicImage> {
-    libavif_image::read(raw).map_err(Into::into)
+    image::load_from_memory_with_format(raw, ImageFormat::Avif).map_err(Into::into)
 }
 
 fn decode_jpeg(raw: &[u8]) -> Result<DynamicImage> {
