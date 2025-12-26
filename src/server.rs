@@ -61,13 +61,9 @@ async fn get_image(
     }
 
     let result = state
-        .get_image(
-            &query.url,
-            options_from_query(&query, &headers),
-            !query.is_nocache(),
-        )
+        .get_image(&query.url, options_from_query(&query, &headers))
         .await;
-    let result = match &*result {
+    let result = match result {
         Ok(res) => res,
         Err(err) => return (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()).into_response(),
     };
@@ -81,10 +77,6 @@ async fn get_image(
     if query.is_debug() {
         let raw = serde_json::to_string(&ImageDebug::new(&result.output)).unwrap();
         res = res.header("x-image-debug", &raw);
-    }
-
-    if let Some(cache_result) = result.cache_result {
-        res = res.header("x-cache-status", cache_result.as_str());
     }
 
     res.header("x-image-height", result.output.height)
@@ -147,8 +139,6 @@ struct ImageQuery {
     #[serde(default)]
     blur: Option<u32>,
     #[serde(default)]
-    nocache: Option<String>,
-    #[serde(default)]
     s: Option<String>,
 }
 
@@ -159,10 +149,6 @@ impl ImageQuery {
 
     fn is_timing(&self) -> bool {
         Self::is_enabled(&self.timing)
-    }
-
-    fn is_nocache(&self) -> bool {
-        Self::is_enabled(&self.nocache)
     }
 
     fn is_enabled(v: &Option<String>) -> bool {
