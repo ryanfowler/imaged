@@ -37,10 +37,10 @@ where
                     return res;
                 }
                 State::Receiver(mut rx) => {
-                    if rx.changed().await.is_ok() {
-                        if let Some(res) = rx.borrow().to_owned() {
-                            return res;
-                        }
+                    if rx.changed().await.is_ok()
+                        && let Some(res) = rx.borrow().to_owned()
+                    {
+                        return res;
                     }
                 }
             }

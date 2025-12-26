@@ -217,6 +217,8 @@ fn process_image_inner(b: bytes::Bytes, ops: ProcessOptions) -> Result<ImageOutp
         out_img = out_img.blur(sigma);
     }
 
+    out_img.set_color_space(image::metadata::Cicp::SRGB)?;
+
     let out_type = ops.out_type.unwrap_or_else(|| img_type.into());
     let quality = ops
         .quality
@@ -279,19 +281,19 @@ fn decode_webp(raw: &[u8]) -> Result<DynamicImage> {
 }
 
 fn auto_orient(data: &Option<exif::ExifData>, img: DynamicImage) -> DynamicImage {
-    if let Some(data) = data {
-        if let Some(orientation) = data.get_orientation() {
-            return match orientation {
-                2 => img.fliph(),
-                3 => img.rotate180(),
-                4 => img.flipv(),
-                5 => img.rotate90().fliph(),
-                6 => img.rotate90(),
-                7 => img.rotate270().fliph(),
-                8 => img.rotate270(),
-                _ => img,
-            };
-        }
+    if let Some(data) = data
+        && let Some(orientation) = data.get_orientation()
+    {
+        return match orientation {
+            2 => img.fliph(),
+            3 => img.rotate180(),
+            4 => img.flipv(),
+            5 => img.rotate90().fliph(),
+            6 => img.rotate90(),
+            7 => img.rotate270().fliph(),
+            8 => img.rotate270(),
+            _ => img,
+        };
     }
     img
 }
