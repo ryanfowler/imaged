@@ -29,7 +29,7 @@ envy = "0.4.2"
 fast_image_resize = { version = "5.4.0", features = ["image"] }
 hex = "0.4.3"
 hmac = "0.12.1"
-image = { version = "0.25.9", default-features = false, features = ["avif", "avif-native", "png", "tiff"] }
+image = { version = "0.25.9", default-features = false, features = ["avif", "avif-native", "jpeg", "png", "tiff", "webp"] }
 kamadak-exif = "0.6.1"
 memchr = "2.7.6"
 mimalloc = { version = "0.1.48" }
