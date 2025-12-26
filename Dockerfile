@@ -1,6 +1,6 @@
 # syntax = docker/dockerfile:1.3
 
-FROM rust:1.88.0-bookworm as builder
+FROM rust:1.92.0-bookworm as builder
 WORKDIR /imaged
 COPY . .
 RUN apt-get update && apt-get install -y meson nasm cmake

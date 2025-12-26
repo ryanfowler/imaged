@@ -94,14 +94,12 @@ impl ExifData {
     fn get_latitude(&self) -> Option<f64> {
         self.get_coordinate(Tag::GPSLatitude)
             .map(|v| {
-                if let Some(field) = self.exif.get_field(Tag::GPSLatitudeRef, In::PRIMARY) {
-                    if let exif::Value::Ascii(n) = &field.value {
-                        if let Some(s) = n.first() {
-                            if s.starts_with(b"S") {
-                                return -v;
-                            }
-                        }
-                    }
+                if let Some(field) = self.exif.get_field(Tag::GPSLatitudeRef, In::PRIMARY)
+                    && let exif::Value::Ascii(n) = &field.value
+                    && let Some(s) = n.first()
+                    && s.starts_with(b"S")
+                {
+                    return -v;
                 }
                 v
             })
@@ -111,14 +109,12 @@ impl ExifData {
     fn get_longitude(&self) -> Option<f64> {
         self.get_coordinate(Tag::GPSLongitude)
             .map(|v| {
-                if let Some(field) = self.exif.get_field(Tag::GPSLongitudeRef, In::PRIMARY) {
-                    if let exif::Value::Ascii(n) = &field.value {
-                        if let Some(s) = n.first() {
-                            if s.starts_with(b"W") {
-                                return -v;
-                            }
-                        }
-                    }
+                if let Some(field) = self.exif.get_field(Tag::GPSLongitudeRef, In::PRIMARY)
+                    && let exif::Value::Ascii(n) = &field.value
+                    && let Some(s) = n.first()
+                    && s.starts_with(b"W")
+                {
+                    return -v;
                 }
                 v
             })
@@ -138,36 +134,34 @@ impl ExifData {
     }
 
     fn get_coordinate(&self, tag: Tag) -> Option<f64> {
-        if let Some(field) = self.exif.get_field(tag, In::PRIMARY) {
-            if let Value::Rational(n) = &field.value {
-                if n.len() >= 3 {
-                    let hours = n[0].to_f64();
-                    let minutes = n[1].to_f64();
-                    let seconds = n[2].to_f64();
-                    return Some(hours + (minutes / 60.0) + (seconds / 3600.0));
-                }
-            }
+        if let Some(field) = self.exif.get_field(tag, In::PRIMARY)
+            && let Value::Rational(n) = &field.value
+            && n.len() >= 3
+        {
+            let hours = n[0].to_f64();
+            let minutes = n[1].to_f64();
+            let seconds = n[2].to_f64();
+            return Some(hours + (minutes / 60.0) + (seconds / 3600.0));
         }
         None
     }
 
     fn get_field_string(&self, tag: Tag) -> Option<String> {
-        if let Some(field) = self.exif.get_field(tag, In::PRIMARY) {
-            if let Value::Ascii(v) = &field.value {
-                if !v.is_empty() {
-                    return std::str::from_utf8(&v[0]).ok().map(ToString::to_string);
-                }
-            }
+        if let Some(field) = self.exif.get_field(tag, In::PRIMARY)
+            && let Value::Ascii(v) = &field.value
+            && !v.is_empty()
+        {
+            return std::str::from_utf8(&v[0]).ok().map(ToString::to_string);
         }
         None
     }
 
     fn get_field_rational(&self, tag: Tag) -> Option<(u32, u32)> {
         self.exif.get_field(tag, In::PRIMARY).and_then(|field| {
-            if let Value::Rational(v) = &field.value {
-                if !v.is_empty() {
-                    return Some((v[0].num, v[0].denom));
-                }
+            if let Value::Rational(v) = &field.value
+                && !v.is_empty()
+            {
+                return Some((v[0].num, v[0].denom));
             }
             None
         })
