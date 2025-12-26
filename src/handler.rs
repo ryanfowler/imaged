@@ -1,21 +1,16 @@
-use std::{fmt::Write, sync::Arc, time::SystemTime};
+use std::{fmt::Write, time::SystemTime};
 
 use anyhow::{Result, anyhow};
 use reqwest::Client;
 use tokio::sync::Semaphore;
 
 use crate::{
-    cache::{disk::DiskCache, memory::MemoryCache},
     image::{ImageMetadata, ImageOutput, ImageProccessor, MetadataOptions, ProcessOptions},
     signature::Verifier,
-    singleflight::Group,
 };
 
 pub struct Handler {
-    pub mem_cache: Option<MemoryCache>,
-    pub disk_cache: Option<DiskCache>,
     pub client: Client,
-    pub group: Group<Key, Arc<Result<ImageResponse>>>,
     pub processor: ImageProccessor,
     pub semaphore: Semaphore,
     pub verifier: Option<Verifier>,
@@ -23,7 +18,6 @@ pub struct Handler {
 
 #[derive(Clone)]
 pub struct ImageResponse {
-    pub cache_result: Option<CacheResult>,
     pub output: ImageOutput,
     pub timing: ServerTiming,
 }
@@ -35,8 +29,6 @@ pub struct MetadataResponse {
 
 impl Handler {
     pub fn new(
-        mem_cache: Option<MemoryCache>,
-        disk_cache: Option<DiskCache>,
         client: Client,
         processor: ImageProccessor,
         concurrency: usize,
@@ -44,10 +36,7 @@ impl Handler {
     ) -> Self {
         assert!(concurrency > 0);
         Self {
-            mem_cache,
-            disk_cache,
             client,
-            group: Group::new(),
             processor,
             semaphore: Semaphore::new(concurrency),
             verifier,
@@ -68,63 +57,10 @@ impl Handler {
 
     /// This method has to return an Arc<Result<_>> because of the use of
     /// singleflight, which requires the output implement the Clone trait.
-    pub async fn get_image(
-        &self,
-        url: &str,
-        options: ProcessOptions,
-        should_cache: bool,
-    ) -> Arc<Result<ImageResponse>> {
-        let key = Key {
-            input: url.to_owned(),
-            options,
-        };
-        self.group
-            .run(&key, || async {
-                Arc::new(self.get_image_inner(url, options, should_cache).await)
-            })
-            .await
-    }
-
-    async fn get_image_inner(
-        &self,
-        url: &str,
-        options: ProcessOptions,
-        should_cache: bool,
-    ) -> Result<ImageResponse> {
+    pub async fn get_image(&self, url: &str, options: ProcessOptions) -> Result<ImageResponse> {
         let _permit = self.semaphore.acquire().await?;
 
         let mut timing = ServerTiming::new();
-
-        if let Some(cache) = &self.mem_cache {
-            let start = SystemTime::now();
-            let output = cache.get(url, options);
-            timing.push("mem_cache_get", start);
-            if let Some(output) = output {
-                return Ok(ImageResponse {
-                    cache_result: Some(CacheResult::Hit),
-                    output,
-                    timing,
-                });
-            }
-        }
-
-        if let Some(cache) = &self.disk_cache {
-            let start = SystemTime::now();
-            let output = cache.get(url, options).await;
-            timing.push("disk_cache_get", start);
-            if let Ok(Some(output)) = output {
-                if let (Some(mem_cache), true) = (&self.mem_cache, should_cache) {
-                    let start = SystemTime::now();
-                    mem_cache.set(url, options, output.clone());
-                    timing.push("mem_cache_put", start);
-                }
-                return Ok(ImageResponse {
-                    cache_result: Some(CacheResult::Hit),
-                    output,
-                    timing,
-                });
-            }
-        }
 
         let start = SystemTime::now();
         let body = self.get_orig_image(url).await?;
@@ -134,26 +70,7 @@ impl Handler {
         let output = self.processor.process_image(body, options).await?;
         timing.push("process", start);
 
-        if let (Some(cache), true) = (&self.mem_cache, should_cache) {
-            let start = SystemTime::now();
-            cache.set(url, options, output.clone());
-            timing.push("mem_cache_put", start);
-        }
-
-        if let (Some(cache), true) = (&self.disk_cache, should_cache) {
-            let start = SystemTime::now();
-            _ = cache.set(url, options, output.clone()).await;
-            timing.push("disk_cache_put", start);
-        }
-
-        let cache_result =
-            (self.mem_cache.is_some() || self.disk_cache.is_some()).then_some(CacheResult::Miss);
-
-        Ok(ImageResponse {
-            cache_result,
-            output,
-            timing,
-        })
+        Ok(ImageResponse { output, timing })
     }
 
     pub async fn get_metadata(&self, url: &str, thumbhash: bool) -> Result<MetadataResponse> {
@@ -180,21 +97,6 @@ impl Handler {
         }
 
         res.bytes().await.map_err(Into::into)
-    }
-}
-
-#[derive(Clone, Copy)]
-pub enum CacheResult {
-    Hit,
-    Miss,
-}
-
-impl CacheResult {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            CacheResult::Hit => "HIT",
-            CacheResult::Miss => "MISS",
-        }
     }
 }
 
@@ -239,10 +141,4 @@ impl ServerTiming {
             .as_secs_f32()
             * 1000.0
     }
-}
-
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Key {
-    input: String,
-    options: ProcessOptions,
 }
