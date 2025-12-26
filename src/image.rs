@@ -261,8 +261,7 @@ fn decode_avif(raw: &[u8]) -> Result<DynamicImage> {
 }
 
 fn decode_jpeg(raw: &[u8]) -> Result<DynamicImage> {
-    let img: image::RgbImage = decompress_jpeg_internal(raw)?;
-    Ok(image::DynamicImage::from(img))
+    image::load_from_memory_with_format(raw, ImageFormat::Jpeg).map_err(Into::into)
 }
 
 fn decode_png(raw: &[u8]) -> Result<DynamicImage> {
@@ -274,10 +273,7 @@ fn decode_tiff(raw: &[u8]) -> Result<DynamicImage> {
 }
 
 fn decode_webp(raw: &[u8]) -> Result<DynamicImage> {
-    webp::Decoder::new(raw)
-        .decode()
-        .ok_or_else(|| anyhow!("unable to decode image as webp"))
-        .map(|v| v.to_image())
+    image::load_from_memory_with_format(raw, ImageFormat::WebP).map_err(Into::into)
 }
 
 fn auto_orient(data: &Option<exif::ExifData>, img: DynamicImage) -> DynamicImage {
@@ -430,30 +426,6 @@ fn get_thumbhash(mut img: DynamicImage) -> String {
 }
 
 // Copied from turbojpeg source in order to use our own version of the image crate.
-
-pub fn decompress_jpeg_internal<P>(jpeg_data: &[u8]) -> Result<image::ImageBuffer<P, Vec<u8>>>
-where
-    P: JpegPixel + 'static,
-{
-    let mut decompressor = turbojpeg::Decompressor::new()?;
-    let header = decompressor.read_header(jpeg_data)?;
-
-    let pitch = header.width * P::PIXEL_FORMAT.size();
-    let mut image_data = vec![0; pitch * header.height];
-    let image = turbojpeg::Image {
-        pixels: &mut image_data[..],
-        width: header.width,
-        pitch,
-        height: header.height,
-        format: P::PIXEL_FORMAT,
-    };
-    decompressor.decompress(jpeg_data, image)?;
-
-    let image_buf =
-        image::ImageBuffer::from_raw(header.width as u32, header.height as u32, image_data)
-            .unwrap();
-    Ok(image_buf)
-}
 
 pub fn compress_jpeg_internal<P>(
     image_buf: &image::ImageBuffer<P, Vec<u8>>,
