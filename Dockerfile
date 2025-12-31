@@ -35,7 +35,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN set -eux; \
     mkdir -p /out; \
     cp -a /usr/lib/*-linux-gnu/libmimalloc.so.3.0 /out/libmimalloc.so.3.0; \
-    ln -sf libmimalloc.so.3.0 /out/libmimalloc.so.3 \
+    ln -sf libmimalloc.so.3.0 /out/libmimalloc.so.3; \
     STDCPP="$(dpkg -L libstdc++6 | grep -m1 -E '/libstdc\+\+\.so\.6$')"; \
     GCCS="$(dpkg -L libgcc-s1   | grep -m1 -E '/libgcc_s\.so\.1$')"; \
     cp -aL "$STDCPP" /out/libstdc++.so.6; \
@@ -54,11 +54,11 @@ COPY --from=prod-deps /app/node_modules /app/node_modules
 COPY --from=prod-deps /app/package.json /app/package.json
 COPY --from=prod-deps /app/bun.lock* /app/
 
-COPY --from=mimalloc /out/libmimalloc.so.3.0 /usr/lib/libmimalloc.so.3.0
-COPY --from=mimalloc /out/libmimalloc.so.3   /usr/lib/libmimalloc.so.3
-ENV LD_PRELOAD=/usr/lib/libmimalloc.so.3
+COPY --from=libs /out/libstdc++.so.6 /usr/lib/libstdc++.so.6
+COPY --from=libs /out/libgcc_s.so.1  /lib/libgcc_s.so.1
 
-COPY --from=cxxlibs /out/libstdc++.so.6 /usr/lib/libstdc++.so.6
-COPY --from=cxxlibs /out/libgcc_s.so.1  /lib/libgcc_s.so.1
+COPY --from=libs /out/libmimalloc.so.3.0 /usr/lib/libmimalloc.so.3.0
+COPY --from=libs /out/libmimalloc.so.3   /usr/lib/libmimalloc.so.3
+ENV LD_PRELOAD=/usr/lib/libmimalloc.so.3
 
 CMD ["./index.ts"]
