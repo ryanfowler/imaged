@@ -30,7 +30,7 @@ export interface MetadataResult {
   width: number;
   height: number;
   size: number;
-  meta?: ExifData;
+  exif?: ExifData;
   stats?: Stats;
   thumbhash?: string;
 }

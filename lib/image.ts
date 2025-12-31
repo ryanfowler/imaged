@@ -69,12 +69,13 @@ export class ImageEngine {
 
   async metadata(
     data: Uint8Array,
+    doExif: boolean,
     doStats: boolean,
     doThumbhash: boolean
   ): Promise<MetadataResult> {
     await this.sema.acquire();
     try {
-      return await this.metadataInner(data, doStats, doThumbhash);
+      return await this.metadataInner(data, doExif, doStats, doThumbhash);
     } catch (err) {
       if (err instanceof Error) {
         throw new Response(err.toString(), { status: 400 });
@@ -87,15 +88,16 @@ export class ImageEngine {
 
   private async metadataInner(
     data: Uint8Array,
+    doExif: boolean,
     doStats: boolean,
     doThumbhash: boolean
   ): Promise<MetadataResult> {
     const img = sharp(data, ImageEngine.DEFAULT_OPS);
     const meta = await img.metadata();
 
-    let metadata;
-    if (meta.exif) {
-      metadata = getExif(meta.exif);
+    let exif;
+    if (doExif && meta.exif) {
+      exif = getExif(meta.exif);
     }
 
     let stats;
@@ -139,7 +141,7 @@ export class ImageEngine {
       width: meta.autoOrient?.width || meta.width,
       height: meta.autoOrient?.height || meta.height,
       size: data.length,
-      meta: metadata,
+      exif,
       stats,
       thumbhash,
     };

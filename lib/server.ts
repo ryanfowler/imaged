@@ -27,9 +27,15 @@ export class Server {
       const data = await this.client.fetch(ops.url);
 
       if (params.has("metadata")) {
+        const doExif = params.has("exif");
         const doStats = params.has("stats");
         const doThumbhash = params.has("thumbhash");
-        const res = await this.engine.metadata(data, doStats, doThumbhash);
+        const res = await this.engine.metadata(
+          data,
+          doExif,
+          doStats,
+          doThumbhash
+        );
         return Response.json(res);
       }
 
