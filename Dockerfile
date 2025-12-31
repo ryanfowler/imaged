@@ -24,37 +24,22 @@ RUN --mount=type=cache,target=/root/.bun \
 
 
 ############################
-# 3) Get mimalloc runtime library
+# 3) Get runtime libraries
 ############################
-FROM debian:trixie-slim AS mimalloc
+FROM debian:trixie-slim AS libs
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      libmimalloc3 \
+      libmimalloc3 libstdc++6 libgcc-s1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Create output dir, then copy the real .so and add a stable symlink name
+# Create output dir, then copy the .so's and add a stable symlink name.
 RUN set -eux; \
     mkdir -p /out; \
     cp -a /usr/lib/*-linux-gnu/libmimalloc.so.3.0 /out/libmimalloc.so.3.0; \
-    ln -sf libmimalloc.so.3.0 /out/libmimalloc.so.3
-
-############################
-# 3b) Runtime C++ libs needed by sharp on distroless
-############################
-FROM debian:trixie-slim AS cxxlibs
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      libstdc++6 libgcc-s1 \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN set -eux; \
-    mkdir -p /out; \
+    ln -sf libmimalloc.so.3.0 /out/libmimalloc.so.3 \
     STDCPP="$(dpkg -L libstdc++6 | grep -m1 -E '/libstdc\+\+\.so\.6$')"; \
     GCCS="$(dpkg -L libgcc-s1   | grep -m1 -E '/libgcc_s\.so\.1$')"; \
-    # Copy the *real* file behind the symlink
     cp -aL "$STDCPP" /out/libstdc++.so.6; \
-    cp -aL "$GCCS"   /out/libgcc_s.so.1; \
-    ls -l /out; \
-    test -f /out/libstdc++.so.6; \
-    test -f /out/libgcc_s.so.1
+    cp -aL "$GCCS"   /out/libgcc_s.so.1
 
 ############################
 # 4) Distroless runtime
