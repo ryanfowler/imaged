@@ -27,15 +27,12 @@ export class Server {
       const data = await this.client.fetch(ops.url);
 
       if (params.has("metadata")) {
-        const doExif = params.has("exif");
-        const doStats = params.has("stats");
-        const doThumbhash = params.has("thumbhash");
-        const res = await this.engine.metadata(
+        const res = await this.engine.metadata({
           data,
-          doExif,
-          doStats,
-          doThumbhash
-        );
+          exif: parseBoolean(params, "exif") || false,
+          stats: parseBoolean(params, "stats") || false,
+          thumbhash: parseBoolean(params, "thumbhash") || false,
+        });
         return Response.json(res);
       }
 

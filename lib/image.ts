@@ -4,6 +4,7 @@ import {
   type ImageOptions,
   type ImageResult,
   ImageType,
+  type MetadataOptions,
   type MetadataResult,
 } from "./types";
 
@@ -67,15 +68,10 @@ export class ImageEngine {
     };
   }
 
-  async metadata(
-    data: Uint8Array,
-    doExif: boolean,
-    doStats: boolean,
-    doThumbhash: boolean
-  ): Promise<MetadataResult> {
+  async metadata(ops: MetadataOptions): Promise<MetadataResult> {
     await this.sema.acquire();
     try {
-      return await this.metadataInner(data, doExif, doStats, doThumbhash);
+      return await this.metadataInner(ops);
     } catch (err) {
       if (err instanceof Error) {
         throw new Response(err.toString(), { status: 400 });
@@ -86,22 +82,17 @@ export class ImageEngine {
     }
   }
 
-  private async metadataInner(
-    data: Uint8Array,
-    doExif: boolean,
-    doStats: boolean,
-    doThumbhash: boolean
-  ): Promise<MetadataResult> {
-    const img = sharp(data, ImageEngine.DEFAULT_OPS);
+  private async metadataInner(ops: MetadataOptions): Promise<MetadataResult> {
+    const img = sharp(ops.data, ImageEngine.DEFAULT_OPS);
     const meta = await img.metadata();
 
     let exif;
-    if (doExif && meta.exif) {
+    if (ops.exif && meta.exif) {
       exif = getExif(meta.exif);
     }
 
     let stats;
-    if (doStats) {
+    if (ops.stats) {
       const { entropy, sharpness, dominant } = await img.stats();
       stats = {
         entropy: roundTo3(entropy),
@@ -111,7 +102,7 @@ export class ImageEngine {
     }
 
     let thumbhash;
-    if (doThumbhash) {
+    if (ops.thumbhash) {
       const { data, info } = await img
         .resize({
           width: 100,
@@ -140,7 +131,7 @@ export class ImageEngine {
       format,
       width: meta.autoOrient?.width || meta.width,
       height: meta.autoOrient?.height || meta.height,
-      size: data.length,
+      size: ops.data.length,
       exif,
       stats,
       thumbhash,

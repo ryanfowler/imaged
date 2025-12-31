@@ -25,6 +25,13 @@ export interface ImageResult {
   height: number;
 }
 
+export interface MetadataOptions {
+  data: Uint8Array;
+  exif: boolean;
+  stats: boolean;
+  thumbhash: boolean;
+}
+
 export interface MetadataResult {
   format: string;
   width: number;
