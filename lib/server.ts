@@ -14,46 +14,75 @@ export class Server {
   serve(port: string | number): Bun.Server<undefined> {
     return Bun.serve({
       port,
-      fetch: this.handler,
+      routes: {
+        "/dynamic": httpWrap(this.dynamic),
+        "/metadata": httpWrap(this.metadata),
+      },
     });
   }
 
-  private handler = async (request: Request) => {
+  private dynamic = async (request: Request): Promise<Response> => {
+    if (request.method !== "GET") {
+      return resMethodNotAllowed;
+    }
+
+    const params = new URL(request.url).searchParams;
+    const accept = request.headers.get("accept") ?? "";
+    const ops = parseImageOps(params, accept);
+
+    const data = await this.client.fetch(ops.url);
+
+    const img = await this.engine.perform({
+      data,
+      format: ops.format,
+      width: ops.width,
+      height: ops.height,
+      quality: ops.quality,
+      blur: ops.blur,
+      greyscale: ops.greyscale,
+      lossless: ops.lossless,
+      progressive: ops.progressive,
+    });
+
+    return new Response(img.data, {
+      headers: {
+        "content-type": getMimetype(img.format),
+        "x-image-width": img.width.toString(),
+        "x-image-height": img.height.toString(),
+      },
+    });
+  };
+
+  private metadata = async (request: Request): Promise<Response> => {
+    if (request.method !== "GET") {
+      return resMethodNotAllowed;
+    }
+
+    const params = new URL(request.url).searchParams;
+    const url = params.get("url");
+    if (!url) {
+      return new Response("missing 'url' query parameter", { status: 400 });
+    }
+
+    const data = await this.client.fetch(url);
+    const res = await this.engine.metadata({
+      data,
+      exif: parseBoolean(params, "exif") || false,
+      stats: parseBoolean(params, "stats") || false,
+      thumbhash: parseBoolean(params, "thumbhash") || false,
+    });
+    return Response.json(res);
+  };
+}
+
+const resMethodNotAllowed = new Response("method not allowed", { status: 405 });
+
+type Handler = (r: Request) => Promise<Response>;
+
+function httpWrap(h: Handler): Handler {
+  return async (request: Request): Promise<Response> => {
     try {
-      const params = new URL(request.url).searchParams;
-      const accept = request.headers.get("accept") ?? "";
-      const ops = parseImageOps(params, accept);
-
-      const data = await this.client.fetch(ops.url);
-
-      if (params.has("metadata")) {
-        const res = await this.engine.metadata({
-          data,
-          exif: parseBoolean(params, "exif") || false,
-          stats: parseBoolean(params, "stats") || false,
-          thumbhash: parseBoolean(params, "thumbhash") || false,
-        });
-        return Response.json(res);
-      }
-
-      const img = await this.engine.perform({
-        data,
-        format: ops.format,
-        width: ops.width,
-        height: ops.height,
-        quality: ops.quality,
-        blur: ops.blur,
-        greyscale: ops.greyscale,
-        lossless: ops.lossless,
-      });
-
-      return new Response(img.data, {
-        headers: {
-          "content-type": getMimetype(img.format),
-          "x-image-width": img.width.toString(),
-          "x-image-height": img.height.toString(),
-        },
-      });
+      return await h(request);
     } catch (err) {
       if (err instanceof Response) {
         return err;
@@ -73,6 +102,7 @@ interface Options {
   blur?: boolean;
   greyscale?: boolean;
   lossless?: boolean;
+  progressive?: boolean;
 }
 
 function parseImageOps(params: URLSearchParams, accept: string): Options {
@@ -90,6 +120,7 @@ function parseImageOps(params: URLSearchParams, accept: string): Options {
     blur: parseBoolean(params, "blur"),
     greyscale: parseBoolean(params, "greyscale"),
     lossless: parseBoolean(params, "lossless"),
+    progressive: parseBoolean(params, "progressive"),
   };
 }
 

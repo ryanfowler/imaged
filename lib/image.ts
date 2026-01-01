@@ -151,7 +151,10 @@ function applyFormat(img: sharp.Sharp, ops: ImageOptions): sharp.Sharp {
     case ImageType.Gif:
       return img.gif({ effort: 4 });
     case ImageType.Jpeg:
-      return img.jpeg({ quality: ops.quality || 75, progressive: true });
+      return img.jpeg({
+        quality: ops.quality || 75,
+        progressive: ops.progressive,
+      });
     case ImageType.Png:
       return img.png({ quality: ops.quality || 75 });
     case ImageType.Tiff:

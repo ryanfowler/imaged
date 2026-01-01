@@ -1,22 +1,82 @@
 <html>
   <head>
     <style>
-      .easeload {
+      /* .easeload {
         opacity: 0;
         transition: all 0.2s ease;
         -webkit-transition: all 0.2s ease;
         -moz-transition: all 0.2s ease;
         -ms-transition: all 0.2s ease;
         -o-transition: all 0.2s ease;
-      }
+      } */
       body {
         display: flex;
         flex-wrap: wrap;
       }
+
+      .img-wrapper {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  /* background: #111; */
+}
+
+.img-wrapper img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.img-wrapper canvas {
+  position: absolute;
+  inset: 50%;
+  min-width: 100%;
+  min-height: 100%;
+  transform: translate(-50%, -50%);
+}
+
+.img-wrapper img {
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+
+.img-wrapper img.loaded {
+  opacity: 1;
+}
     </style>
   </head>
   <body>
-    <div id="background" style="height: 400; width: 400">
+    <div class="img-wrapper" data-thumbhash="nqYNNYxmd4ifh4d1iFiHdJdiYBkG" style="height: 400; width: 400; background: #58a8d8">
+      <canvas class="thumb"></canvas>
+      <img
+        src="http://localhost:8000/dynamic?url=http%3A%2F%2Flocalhost:3000%2Fimg1.jpg&width=800&height=800&format=avif,webp,jpeg"
+        loading="lazy"
+        decoding="async"
+      />
+    </div>
+
+    <div class="img-wrapper" data-thumbhash="WwgWDQJ2h393h3h4h3h4Z2IncARF" style="height: 400; width: 400; background: #281818">
+      <canvas class="thumb"></canvas>
+      <img
+        src="http://localhost:8000/dynamic?url=http%3A%2F%2Flocalhost:3000%2Fimg2.jpg&width=800&height=800&format=avif,webp,jpeg"
+        loading="lazy"
+        decoding="async"
+      />
+    </div>
+
+    <div class="img-wrapper" data-thumbhash="EKcRHYh5d4efeIeKeIh3d5dweAmH" style="height: 400; width: 400; background: #081818">
+      <canvas class="thumb"></canvas>
+      <img
+        src="http://localhost:8000/dynamic?url=http%3A%2F%2Flocalhost:3000%2Fimg3.jpg&width=800&height=800&format=avif,webp,jpeg"
+        loading="lazy"
+        decoding="async"
+      />
+    </div>
+
+    <!-- <div id="background" style="height: 400; width: 400">
+      <canvas class="thumbhash"></canvas>
       <img
         id="demo"
         class="easeload"
@@ -24,11 +84,12 @@
         loading="lazy"
         height="400"
         width="400"
-        src="http://localhost:8000/?width=800&height=800&url=http%3A%2F%2Flocalhost:3000%2Fimg1.jpg&format=avif,webp,jpeg&timing&q=1"
+        src="http://localhost:8000/dynamic?width=800&height=800&url=http%3A%2F%2Flocalhost:3000%2Fimg1.jpg&format=avif,webp,jpeg&timing&q=1"
       />
     </div>
 
     <div id="background2" style="height: 400; width: 400">
+      <canvas class="thumbhash"></canvas>
       <img
         id="demo2"
         class="easeload"
@@ -36,11 +97,12 @@
         loading="lazy"
         height="400"
         width="400"
-        src="http://localhost:8000/?width=800&height=800&url=http%3A%2F%2Flocalhost:3000%2Fimg2.jpg&format=avif,webp,jpeg&q=2"
+        src="http://localhost:8000/dynamic?width=800&height=800&url=http%3A%2F%2Flocalhost:3000%2Fimg2.jpg&format=avif,webp,jpeg&q=2"
       />
     </div>
 
     <div id="background3" style="height: 400; width: 400">
+      <canvas class="thumbhash"></canvas>
       <img
         id="demo2"
         class="easeload"
@@ -48,11 +110,12 @@
         loading="lazy"
         height="400"
         width="400"
-        src="http://localhost:8000/?width=800&height=800&url=http%3A%2F%2Flocalhost:3000%2Fimg1.jpg&format=webp,webp,jpeg&q=3"
+        src="http://localhost:8000/dynamic?width=800&height=800&url=http%3A%2F%2Flocalhost:3000%2Fimg1.jpg&format=webp,webp,jpeg&q=3"
       />
     </div>
 
     <div id="background4" style="height: 400; width: 400">
+      <canvas class="thumbhash"></canvas>
       <img
         id="demo2"
         class="easeload"
@@ -60,11 +123,12 @@
         loading="lazy"
         height="400"
         width="400"
-        src="http://localhost:8000/?width=800&height=800&url=http%3A%2F%2Flocalhost:3000%2Fimg2.jpg&format=webp,webp,jpeg&q=4"
+        src="http://localhost:8000/dynamic?width=800&height=800&url=http%3A%2F%2Flocalhost:3000%2Fimg2.jpg&format=webp,webp,jpeg&q=4"
       />
     </div>
 
     <div id="background5" style="height: 400; width: 400">
+      <canvas class="thumbhash"></canvas>
       <img
         id="demo"
         class="easeload"
@@ -72,11 +136,12 @@
         loading="lazy"
         height="400"
         width="400"
-        src="http://localhost:8000/?width=800&height=800&url=http%3A%2F%2Flocalhost:3000%2Fimg1.jpg&format=jpeg&q=5"
+        src="http://localhost:8000/dynamic?width=800&height=800&url=http%3A%2F%2Flocalhost:3000%2Fimg1.jpg&format=jpeg&q=5"
       />
     </div>
 
     <div id="background6" style="height: 400; width: 400">
+      <canvas class="thumbhash"></canvas>
       <img
         id="demo2"
         class="easeload"
@@ -84,11 +149,12 @@
         loading="lazy"
         height="400"
         width="400"
-        src="http://localhost:8000/?width=800&height=800&url=http%3A%2F%2Flocalhost:3000%2Fimg2.jpg&format=jpeg&q=6"
+        src="http://localhost:8000/dynamic?width=800&height=800&url=http%3A%2F%2Flocalhost:3000%2Fimg2.jpg&format=jpeg&q=6"
       />
     </div>
 
     <div id="background7" style="height: 400; width: 400">
+      <canvas class="thumbhash"></canvas>
       <img
         id="demo2"
         class="easeload"
@@ -96,21 +162,23 @@
         loading="lazy"
         height="400"
         width="400"
-        src="http://localhost:8000/?width=800&height=800&url=http%3A%2F%2Flocalhost:3000%2Fimg1.jpg&format=webp,webp,jpeg&q=7"
+        src="http://localhost:8000/dynamic?width=800&height=800&url=http%3A%2F%2Flocalhost:3000%2Fimg1.jpg&format=webp,webp,jpeg&q=7"
       />
     </div>
 
     <div id="background8" style="height: 400; width: 400">
+      <canvas class="thumbhash"></canvas>
       <img
         id="demo2"
         class="easeload"
         onload="this.style.opacity = 1"
         loading="lazy"
+        decoding="async"
         height="400"
         width="400"
-        src="http://localhost:8000/?width=800&height=800&url=http%3A%2F%2Flocalhost:3000%2Fimg2.jpg&format=webp,webp,jpeg&q=8"
+        src="http://localhost:8000/dynamic?width=800&height=800&url=http%3A%2F%2Flocalhost:3000%2Fimg2.jpg&format=webp,webp,jpeg&q=8"
       />
-    </div>
+    </div> -->
 
     <script>
       /**
@@ -517,58 +585,88 @@
         return rgbaToDataURL(image.w, image.h, image.rgba);
       }
 
-      const hash = Uint8Array.from(
-        atob("4MYRLwh2d4ePiIh2iFd3R4h5iSgGiHEA"),
-        c => c.charCodeAt(0)
-      );
-      const hash2 = Uint8Array.from(
-        atob("mggWFwCGh4d/d3eIh4iIqId5R/aEBiUK"),
-        c => c.charCodeAt(0)
-      );
+      function renderThumbHash(canvas, thumbhashBase64) {
+        const binary = Uint8Array.from(atob(thumbhashBase64), c =>
+          c.charCodeAt(0),
+        );
+      
+        const { w, h, rgba } = thumbHashToRGBA(binary);
+      
+        canvas.width = w;
+        canvas.height = h;
+      
+        const ctx = canvas.getContext("2d");
+        const img = ctx.createImageData(w, h);
+        img.data.set(rgba);
+        ctx.putImageData(img, 0, 0);
+      }
 
-      const placeholderUrl = thumbHashToDataURL(hash);
-      const placeholderUrl2 = thumbHashToDataURL(hash2);
+      document.querySelectorAll(".img-wrapper").forEach(wrapper => {
+        const canvas = wrapper.querySelector("canvas");
+        const img = wrapper.querySelector("img");
 
-      const averageUrl = thumbHashToAverageRGBA(hash);
-      const r = Math.round(averageUrl.r * 255);
-      const g = Math.round(averageUrl.g * 255);
-      const b = Math.round(averageUrl.b * 255);
-      const averageUrl2 = thumbHashToAverageRGBA(hash2);
-      const r2 = Math.round(averageUrl2.r * 255);
-      const g2 = Math.round(averageUrl2.g * 255);
-      const b2 = Math.round(averageUrl2.b * 255);
+        const thumbhash = wrapper.getAttribute("data-thumbhash");
+        renderThumbHash(canvas, thumbhash);
 
-      const demo = document.getElementById("background");
-      demo.style.background = `center / cover url(${placeholderUrl})`;
-      // demo.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+        img.addEventListener("load", () => {
+          img.classList.add("loaded");
+        });
+      });
 
-      const demo2 = document.getElementById("background2");
-      demo2.style.background = `center / cover url(${placeholderUrl2})`;
-      // demo2.style.backgroundColor = `rgb(${r2}, ${g2}, ${b2})`;
+      // const hash = Uint8Array.from(
+      //   atob("nqYNNYxmd4ifh4d1iFiHdJdiYBkG"),
+      //   // atob("4MYRLwh2d4ePiIh2iFd3R4h5iSgGiHEA"),
+      //   c => c.charCodeAt(0)
+      // );
+      // const hash2 = Uint8Array.from(
+      //   atob("WwgWDQJ2h393h3h4h3h4Z2IncARF"),
+      //   // atob("mggWFwCGh4d/d3eIh4iIqId5R/aEBiUK"),
+      //   c => c.charCodeAt(0)
+      // );
 
-      const demo3 = document.getElementById("background3");
-      demo3.style.background = `center / cover url(${placeholderUrl})`;
-      // demo3.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+      // const placeholderUrl = thumbHashToDataURL(hash);
+      // const placeholderUrl2 = thumbHashToDataURL(hash2);
 
-      const demo4 = document.getElementById("background4");
-      demo4.style.background = `center / cover url(${placeholderUrl2})`;
-      // demo4.style.backgroundColor = `rgb(${r2}, ${g2}, ${b2})`;
+      // const averageUrl = thumbHashToAverageRGBA(hash);
+      // const r = Math.round(averageUrl.r * 255);
+      // const g = Math.round(averageUrl.g * 255);
+      // const b = Math.round(averageUrl.b * 255);
+      // const averageUrl2 = thumbHashToAverageRGBA(hash2);
+      // const r2 = Math.round(averageUrl2.r * 255);
+      // const g2 = Math.round(averageUrl2.g * 255);
+      // const b2 = Math.round(averageUrl2.b * 255);
 
-      const demo5 = document.getElementById("background5");
-      demo5.style.background = `center / cover url(${placeholderUrl})`;
-      // demo5.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+      // const demo = document.getElementById("background");
+      // demo.style.background = `center / cover url(${placeholderUrl})`;
+      // // demo.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
 
-      const demo6 = document.getElementById("background6");
-      demo6.style.background = `center / cover url(${placeholderUrl2})`;
-      // demo6.style.backgroundColor = `rgb(${r2}, ${g2}, ${b2})`;
+      // const demo2 = document.getElementById("background2");
+      // demo2.style.background = `center / cover url(${placeholderUrl2})`;
+      // // demo2.style.backgroundColor = `rgb(${r2}, ${g2}, ${b2})`;
 
-      const demo7 = document.getElementById("background7");
-      demo7.style.background = `center / cover url(${placeholderUrl})`;
-      // demo7.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+      // const demo3 = document.getElementById("background3");
+      // demo3.style.background = `center / cover url(${placeholderUrl})`;
+      // // demo3.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
 
-      const demo8 = document.getElementById("background8");
-      demo8.style.background = `center / cover url(${placeholderUrl2})`;
-      // demo8.style.backgroundColor = `rgb(${r2}, ${g2}, ${b2})`;
+      // const demo4 = document.getElementById("background4");
+      // demo4.style.background = `center / cover url(${placeholderUrl2})`;
+      // // demo4.style.backgroundColor = `rgb(${r2}, ${g2}, ${b2})`;
+
+      // const demo5 = document.getElementById("background5");
+      // demo5.style.background = `center / cover url(${placeholderUrl})`;
+      // // demo5.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+
+      // const demo6 = document.getElementById("background6");
+      // demo6.style.background = `center / cover url(${placeholderUrl2})`;
+      // // demo6.style.backgroundColor = `rgb(${r2}, ${g2}, ${b2})`;
+
+      // const demo7 = document.getElementById("background7");
+      // demo7.style.background = `center / cover url(${placeholderUrl})`;
+      // // demo7.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+
+      // const demo8 = document.getElementById("background8");
+      // demo8.style.background = `center / cover url(${placeholderUrl2})`;
+      // // demo8.style.backgroundColor = `rgb(${r2}, ${g2}, ${b2})`;
     </script>
   </body>
 </html>

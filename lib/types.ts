@@ -16,6 +16,7 @@ export interface ImageOptions {
   blur?: boolean;
   greyscale?: boolean;
   lossless?: boolean;
+  progressive?: boolean;
 }
 
 export interface ImageResult {
