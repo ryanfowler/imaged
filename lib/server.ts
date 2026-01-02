@@ -18,6 +18,7 @@ export class Server {
         "/dynamic": httpWrap(this.dynamic),
         "/metadata": httpWrap(this.metadata),
       },
+      idleTimeout: 30,
     });
   }
 
@@ -42,6 +43,7 @@ export class Server {
       greyscale: ops.greyscale,
       lossless: ops.lossless,
       progressive: ops.progressive,
+      effort: ops.effort,
     });
 
     return new Response(img.data, {
@@ -103,6 +105,7 @@ interface Options {
   greyscale?: boolean;
   lossless?: boolean;
   progressive?: boolean;
+  effort?: number;
 }
 
 function parseImageOps(params: URLSearchParams, accept: string): Options {
@@ -121,6 +124,7 @@ function parseImageOps(params: URLSearchParams, accept: string): Options {
     greyscale: parseBoolean(params, "greyscale"),
     lossless: parseBoolean(params, "lossless"),
     progressive: parseBoolean(params, "progressive"),
+    effort: parseU32(params, "effort"),
   };
 }
 

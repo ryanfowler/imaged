@@ -17,6 +17,7 @@ export interface ImageOptions {
   greyscale?: boolean;
   lossless?: boolean;
   progressive?: boolean;
+  effort?: number;
 }
 
 export interface ImageResult {

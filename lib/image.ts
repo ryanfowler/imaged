@@ -143,8 +143,8 @@ function applyFormat(img: sharp.Sharp, ops: ImageOptions): sharp.Sharp {
   switch (ops.format) {
     case ImageType.Avif:
       return img.avif({
-        quality: ops.quality || 50,
-        effort: 2,
+        quality: ops.quality || 45,
+        effort: ops.effort || 2,
         chromaSubsampling: "4:2:0",
         lossless: ops.lossless,
       });
@@ -160,7 +160,11 @@ function applyFormat(img: sharp.Sharp, ops: ImageOptions): sharp.Sharp {
     case ImageType.Tiff:
       return img.tiff({ quality: ops.quality || 75 });
     case ImageType.Webp:
-      return img.webp({ quality: ops.quality || 75, lossless: ops.lossless });
+      return img.webp({
+        quality: ops.quality || 75,
+        lossless: ops.lossless,
+        effort: ops.effort || 4,
+      });
   }
 }
 
