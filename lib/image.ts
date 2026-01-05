@@ -16,7 +16,7 @@ sharp.concurrency(1);
 
 export class ImageEngine {
   private sema: Semaphore;
-  private static DEFAULT_OPS = { autoOrient: true };
+  private static DEFAULT_OPS = { autoOrient: true, limitInputPixels: 50_000_000 };
 
   static VERSIONS = sharp.versions;
 
