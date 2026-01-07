@@ -7,6 +7,48 @@ export enum ImageType {
   Webp,
 }
 
+export enum ImageFit {
+  Cover = "cover",
+  Contain = "contain",
+  Fill = "fill",
+  Inside = "inside",
+  Outside = "outside",
+}
+
+export enum ImageKernel {
+  Nearest = "nearest",
+  Linear = "linear",
+  Cubic = "cubic",
+  Mitchell = "mitchell",
+  Lanczos2 = "lanczos2",
+  Lanczos3 = "lanczos3",
+  MKS2013 = "mks2013",
+  MKS2021 = "mks2021",
+}
+
+export enum ImagePosition {
+  Top = "top",
+  RightTop = "right top",
+  Right = "right",
+  RightBottom = "right bottom",
+  Bottom = "bottom",
+  LeftBottom = "left bottom",
+  Left = "left",
+  LeftTop = "left top",
+  North = "north",
+  NorthEast = "northeast",
+  East = "east",
+  SouthEast = "southeast",
+  South = "south",
+  SouthWest = "southwest",
+  West = "west",
+  NorthWest = "northwest",
+  Center = "center",
+  Centre = "centre",
+  Entropy = "entropy",
+  Attention = "attention",
+}
+
 export interface ImageOptions {
   data: Uint8Array;
   format: ImageType;
@@ -18,6 +60,9 @@ export interface ImageOptions {
   lossless?: boolean;
   progressive?: boolean;
   effort?: number;
+  fit?: ImageFit;
+  kernel?: ImageKernel;
+  position?: ImagePosition;
 }
 
 export interface ImageResult {

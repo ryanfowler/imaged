@@ -1,6 +1,6 @@
 import type { Client } from "./client";
 import type { ImageEngine } from "./image";
-import { ImageType } from "./types";
+import { ImageFit, ImageKernel, ImagePosition, ImageType } from "./types";
 
 export class Server {
   private client: Client;
@@ -44,6 +44,9 @@ export class Server {
       lossless: ops.lossless,
       progressive: ops.progressive,
       effort: ops.effort,
+      fit: ops.fit,
+      kernel: ops.kernel,
+      position: ops.position,
     });
 
     return new Response(img.data, {
@@ -106,6 +109,9 @@ interface Options {
   lossless?: boolean;
   progressive?: boolean;
   effort?: number;
+  fit?: ImageFit;
+  kernel?: ImageKernel;
+  position?: ImagePosition;
 }
 
 function parseImageOps(params: URLSearchParams, accept: string): Options {
@@ -125,6 +131,9 @@ function parseImageOps(params: URLSearchParams, accept: string): Options {
     lossless: parseBoolean(params, "lossless"),
     progressive: parseBoolean(params, "progressive"),
     effort: parseU32(params, "effort"),
+    fit: parseImageFit(params),
+    kernel: parseImageKernel(params),
+    position: parseImagePosition(params),
   };
 }
 
@@ -132,7 +141,9 @@ const DEFAULT_FORMAT = ImageType.Jpeg;
 
 function parseFormat(params: URLSearchParams, accept: string): ImageType {
   const v = params.get("format");
-  if (v == null || v === "") return DEFAULT_FORMAT;
+  if (v == null || v === "") {
+    return DEFAULT_FORMAT;
+  }
 
   const opts = v
     .split(",")
@@ -140,14 +151,20 @@ function parseFormat(params: URLSearchParams, accept: string): ImageType {
     .filter((s) => s !== "");
 
   // If no options, return the default.
-  if (opts.length === 0) return DEFAULT_FORMAT;
+  if (opts.length === 0) {
+    return DEFAULT_FORMAT;
+  }
 
   // If only one option, return it (or the default).
   if (opts.length === 1) {
     const first = opts[0];
-    if (!first) return DEFAULT_FORMAT;
+    if (!first) {
+      return DEFAULT_FORMAT;
+    }
     const t = getImageType(first);
-    if (t == null) return DEFAULT_FORMAT;
+    if (t == null) {
+      return DEFAULT_FORMAT;
+    }
     return t;
   }
 
@@ -155,7 +172,9 @@ function parseFormat(params: URLSearchParams, accept: string): ImageType {
   const acceptLower = accept.toLowerCase();
   for (const opt of opts) {
     const t = getImageType(opt);
-    if (t == null) continue;
+    if (t == null) {
+      continue;
+    }
     if (acceptLower.includes(getMimetype(t))) {
       return t;
     }
@@ -163,9 +182,13 @@ function parseFormat(params: URLSearchParams, accept: string): ImageType {
 
   // Fallback to the last option (or the default).
   const opt = opts[opts.length - 1];
-  if (!opt) return DEFAULT_FORMAT;
+  if (!opt) {
+    return DEFAULT_FORMAT;
+  }
   const t = getImageType(opt);
-  if (t == null) return DEFAULT_FORMAT;
+  if (t == null) {
+    return DEFAULT_FORMAT;
+  }
   return t;
 }
 
@@ -174,7 +197,9 @@ function parseBoolean(
   key: string
 ): boolean | undefined {
   const v = params.get(key);
-  if (v == null) return undefined;
+  if (v == null) {
+    return undefined;
+  }
   return v !== "false" && v !== "0";
 }
 
@@ -188,13 +213,21 @@ function parseQuality(params: URLSearchParams): number | undefined {
 
 function parseU32(params: URLSearchParams, key: string): number | undefined {
   const v = params.get(key);
-  if (v == null || v === "") return undefined;
+  if (v == null || v === "") {
+    return undefined;
+  }
 
   // strict-ish u32 parsing
   const n = Number(v);
-  if (!Number.isFinite(n)) return undefined;
-  if (!Number.isInteger(n)) return undefined;
-  if (n < 0 || n > 0xffff_ffff) return undefined;
+  if (!Number.isFinite(n)) {
+    return undefined;
+  }
+  if (!Number.isInteger(n)) {
+    return undefined;
+  }
+  if (n < 0 || n > 0xffff_ffff) {
+    return undefined;
+  }
 
   return n;
 }
@@ -235,4 +268,41 @@ function getImageType(raw: string): ImageType | null {
     default:
       return null;
   }
+}
+
+const IMAGE_FIT_SET = new Set<string>(Object.values(ImageFit));
+
+function parseImageFit(params: URLSearchParams): ImageFit | undefined {
+  const fit = params.get("fit");
+  if (fit == null) {
+    return undefined;
+  }
+
+  return IMAGE_FIT_SET.has(fit) ? (fit as ImageFit) : undefined;
+}
+
+const IMAGE_KERNEL_SET = new Set<string>(Object.values(ImageKernel));
+
+function parseImageKernel(params: URLSearchParams): ImageKernel | undefined {
+  const kernel = params.get("kernel");
+  if (kernel == null) {
+    return undefined;
+  }
+
+  return IMAGE_KERNEL_SET.has(kernel) ? (kernel as ImageKernel) : undefined;
+}
+
+const IMAGE_POSITION_SET = new Set<string>(Object.values(ImagePosition));
+
+function parseImagePosition(
+  params: URLSearchParams
+): ImagePosition | undefined {
+  const position = params.get("position");
+  if (position == null) {
+    return undefined;
+  }
+
+  return IMAGE_POSITION_SET.has(position)
+    ? (position as ImagePosition)
+    : undefined;
 }
