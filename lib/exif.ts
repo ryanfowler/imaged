@@ -1,4 +1,4 @@
-import type { ExifData } from "./types";
+import type { ExifData } from "./types.ts";
 
 import exifReader from "exif-reader";
 
@@ -52,10 +52,7 @@ function getLatitude(data: exifReader.Exif): number | undefined {
 }
 
 function getLongitude(data: exifReader.Exif): number | undefined {
-  return getCoordinate(
-    data.GPSInfo?.GPSLongitude,
-    data.GPSInfo?.GPSLongitudeRef
-  );
+  return getCoordinate(data.GPSInfo?.GPSLongitude, data.GPSInfo?.GPSLongitudeRef);
 }
 
 function getCoordinate(val?: number[], ref?: string): number | undefined {
@@ -66,8 +63,7 @@ function getCoordinate(val?: number[], ref?: string): number | undefined {
     return undefined;
   }
 
-  let coord =
-    (val[0] as number) + (val[1] as number) / 60 + (val[2] as number) / 3600;
+  let coord = (val[0] as number) + (val[1] as number) / 60 + (val[2] as number) / 3600;
 
   if (ref === "S" || ref === "W") {
     coord = -coord;

@@ -54,7 +54,7 @@ export class Client {
         reader.cancel();
         throw new Response(
           `Response size limit of ${this.body_limit_bytes} bytes exceeded.`,
-          { status: 400 }
+          { status: 400 },
         );
       }
     }

@@ -1,5 +1,5 @@
-import { getExif } from "./exif";
-import { Semaphore } from "./semaphore";
+import { getExif } from "./exif.ts";
+import { Semaphore } from "./semaphore.ts";
 import {
   ImageFit,
   type ImageOptions,
@@ -7,7 +7,7 @@ import {
   ImageType,
   type MetadataOptions,
   type MetadataResult,
-} from "./types";
+} from "./types.ts";
 
 import sharp from "sharp";
 import { rgbaToThumbHash } from "thumbhash";
@@ -47,15 +47,13 @@ export class ImageEngine {
   private async performInner(ops: ImageOptions): Promise<ImageResult> {
     let img = sharp(ops.data, ImageEngine.DEFAULT_OPS);
 
-    let meta = jpegDimensions(ops.data);
-    if (meta == null) {
-      meta = await img.metadata();
-    }
+    let meta = await img.metadata();
     if (meta.height > MAX_SIZE || meta.width > MAX_SIZE) {
-      throw new Response("maximum dimension must be less than 12,000px", {
+      throw new Response(`maximum dimension must be less than ${MAX_SIZE}px`, {
         status: 400,
       });
     }
+    let final = getFinalSize(meta.width, meta.height, ops.width, ops.height, ops.fit);
 
     if (ops.width || ops.height) {
       img = img.resize({
@@ -76,7 +74,7 @@ export class ImageEngine {
       img = img.blur(10);
     }
 
-    img = applyFormat(img, ops);
+    img = applyFormat(img, ops, final.width, final.height);
 
     const out = await img.toBuffer({ resolveWithObject: true });
     return {
@@ -134,7 +132,8 @@ export class ImageEngine {
         .raw()
         .toBuffer({ resolveWithObject: true });
 
-      thumbhash = rgbaToThumbHash(info.width, info.height, data).toBase64();
+      const rawThumbhash = rgbaToThumbHash(info.width, info.height, data);
+      thumbhash = Buffer.from(rawThumbhash).toString("base64");
     }
 
     let format: string = meta.format;
@@ -158,7 +157,12 @@ export class ImageEngine {
   }
 }
 
-function applyFormat(img: sharp.Sharp, ops: ImageOptions): sharp.Sharp {
+function applyFormat(
+  img: sharp.Sharp,
+  ops: ImageOptions,
+  width: number,
+  height: number,
+): sharp.Sharp {
   switch (ops.format) {
     case ImageType.Avif:
       return img.avif({
@@ -172,7 +176,7 @@ function applyFormat(img: sharp.Sharp, ops: ImageOptions): sharp.Sharp {
     case ImageType.Jpeg:
       return img.jpeg({
         quality: ops.quality || 75,
-        progressive: ops.progressive,
+        progressive: getProgressiveValue(width, height, ops.progressive),
       });
     case ImageType.Png:
       return img.png({ quality: ops.quality || 75 });
@@ -187,107 +191,61 @@ function applyFormat(img: sharp.Sharp, ops: ImageOptions): sharp.Sharp {
   }
 }
 
-function getProgressiveValue(
-  width: number,
-  height: number,
-  value?: boolean
-): boolean {
+function getFinalSize(
+  srcW: number,
+  srcH: number,
+  reqW?: number,
+  reqH?: number,
+  fit?: ImageFit,
+): { width: number; height: number } {
+  if (srcW <= 0 || srcH <= 0) {
+    throw new Error("Invalid source dimensions");
+  }
+
+  const scale = computeScale(srcW, srcH, reqW, reqH, fit);
+
+  return {
+    width: Math.round(srcW * scale),
+    height: Math.round(srcH * scale),
+  };
+}
+
+function computeScale(
+  srcW: number,
+  srcH: number,
+  reqW?: number,
+  reqH?: number,
+  fit?: ImageFit,
+): number {
+  // If neither dimension is provided, scale = 1 (original size)
+  if (!reqW && !reqH) {
+    return 1;
+  }
+
+  // If only one dimension is provided, aspect ratio is fixed
+  if (reqW && !reqH) return reqW / srcW;
+  if (!reqW && reqH) return reqH / srcH;
+
+  // Both provided → fit logic applies
+  const scaleW = reqW! / srcW;
+  const scaleH = reqH! / srcH;
+
+  if (fit === ImageFit.Inside) {
+    return Math.min(scaleW, scaleH);
+  }
+  return Math.max(scaleW, scaleH);
+}
+
+function getProgressiveValue(width: number, height: number, value?: boolean): boolean {
   if (value != null) {
     return value;
   }
 
-  const size = width * height;
-
   // Avoid progressive optimization for small or large images.
+  const size = width * height;
   return size >= 100_000 && size <= 9_000_000;
 }
 
 function roundTo3(n: number): number {
   return Number(Math.round((n + Number.EPSILON) * 1e3) / 1e3);
-}
-
-function jpegDimensions(
-  buf: Uint8Array
-): { width: number; height: number } | null {
-  const n = buf.length;
-  if (n < 4) return null;
-  if (buf[0] !== 0xff || buf[1] !== 0xd8) return null; // SOI
-
-  let i = 2;
-
-  while (i < n) {
-    // Find 0xFF marker prefix (skip any non-0xFF junk defensively)
-    while (i < n && buf[i] !== 0xff) i++;
-    if (i >= n) return null;
-
-    // Skip fill bytes 0xFF 0xFF 0xFF...
-    while (i < n && buf[i] === 0xff) i++;
-    if (i >= n) return null;
-
-    const marker = buf[i]!;
-    i++;
-
-    // Standalone markers (no length field)
-    // SOI (D8) shouldn't appear again, but harmless
-    // EOI (D9) ends image
-    // TEM (01)
-    // RST0..RST7 (D0..D7)
-    if (
-      marker === 0xd8 ||
-      marker === 0xd9 ||
-      marker === 0x01 ||
-      (marker >= 0xd0 && marker <= 0xd7)
-    ) {
-      if (marker === 0xd9) return null; // EOI reached without SOF
-      continue;
-    }
-
-    // Need segment length
-    if (i + 1 >= n) return null;
-    const segLen = u16be(buf, i);
-    i += 2;
-
-    // Length includes the two length bytes; must be >= 2
-    if (segLen < 2) return null;
-    const payloadLen = segLen - 2;
-    if (i + payloadLen > n) return null; // truncated
-
-    // SOF markers (baseline/progressive/etc.) contain dimensions.
-    const isSOF =
-      marker === 0xc0 ||
-      marker === 0xc1 ||
-      marker === 0xc2 ||
-      marker === 0xc3 ||
-      marker === 0xc5 ||
-      marker === 0xc6 ||
-      marker === 0xc7 ||
-      marker === 0xc9 ||
-      marker === 0xca ||
-      marker === 0xcb ||
-      marker === 0xcd ||
-      marker === 0xce ||
-      marker === 0xcf;
-
-    if (isSOF) {
-      // Need: precision (1) + height (2) + width (2) = 5 bytes
-      if (payloadLen < 5) return null;
-      const height = u16be(buf, i + 1);
-      const width = u16be(buf, i + 3);
-      if (!validDims(width, height)) return null;
-      return { width, height };
-    }
-
-    // Skip segment payload
-    i += payloadLen;
-  }
-
-  return null;
-}
-
-function validDims(w: number, h: number): boolean {
-  return Number.isInteger(w) && Number.isInteger(h) && w > 0 && h > 0;
-}
-
-function u16be(b: Uint8Array, o: number): number {
-  return (b[o]! << 8) | b[o + 1]!;
 }

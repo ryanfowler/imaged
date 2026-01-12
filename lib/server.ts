@@ -1,6 +1,6 @@
-import type { Client } from "./client";
-import type { ImageEngine } from "./image";
-import { ImageFit, ImageKernel, ImagePosition, ImageType } from "./types";
+import type { Client } from "./client.ts";
+import type { ImageEngine } from "./image.ts";
+import { ImageFit, ImageKernel, ImagePosition, ImageType } from "./types.ts";
 
 export class Server {
   private client: Client;
@@ -192,10 +192,7 @@ function parseFormat(params: URLSearchParams, accept: string): ImageType {
   return t;
 }
 
-function parseBoolean(
-  params: URLSearchParams,
-  key: string
-): boolean | undefined {
+function parseBoolean(params: URLSearchParams, key: string): boolean | undefined {
   const v = params.get(key);
   if (v == null) {
     return undefined;
@@ -294,15 +291,11 @@ function parseImageKernel(params: URLSearchParams): ImageKernel | undefined {
 
 const IMAGE_POSITION_SET = new Set<string>(Object.values(ImagePosition));
 
-function parseImagePosition(
-  params: URLSearchParams
-): ImagePosition | undefined {
+function parseImagePosition(params: URLSearchParams): ImagePosition | undefined {
   const position = params.get("position");
   if (position == null) {
     return undefined;
   }
 
-  return IMAGE_POSITION_SET.has(position)
-    ? (position as ImagePosition)
-    : undefined;
+  return IMAGE_POSITION_SET.has(position) ? (position as ImagePosition) : undefined;
 }
