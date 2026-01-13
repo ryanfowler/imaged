@@ -1,6 +1,6 @@
 import type { Client } from "./client.ts";
 import type { ImageEngine } from "./image.ts";
-import { ImageFit, ImageKernel, ImagePosition, ImageType } from "./types.ts";
+import { HttpError, ImageFit, ImageKernel, ImagePosition, ImageType } from "./types.ts";
 
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 
@@ -15,6 +15,8 @@ export class Server {
 
   async serve(port: string | undefined): Promise<string> {
     const server = Fastify({});
+    server.setErrorHandler(errorHandler);
+    server.setNotFoundHandler(notFoundHandler);
 
     server.get("/dynamic", this.dynamic);
     server.get("/metadata", this.metadata);
@@ -75,24 +77,6 @@ export class Server {
     });
 
     return reply.send(res);
-  };
-}
-
-const resMethodNotAllowed = new Response("method not allowed", { status: 405 });
-
-type Handler = (r: Request) => Promise<Response>;
-
-function httpWrap(h: Handler): Handler {
-  return async (request: Request): Promise<Response> => {
-    try {
-      return await h(request);
-    } catch (err) {
-      if (err instanceof Response) {
-        return err;
-      }
-      console.log(err);
-      return new Response("internal server error", { status: 500 });
-    }
   };
 }
 
@@ -235,6 +219,8 @@ function getMimetype(format: ImageType): string {
       return "image/gif";
     case ImageType.Jpeg:
       return "image/jpeg";
+    case ImageType.JpegXL:
+      return "image/jxl";
     case ImageType.Png:
       return "image/png";
     case ImageType.Tiff:
@@ -253,6 +239,8 @@ function getImageType(raw: string): ImageType | null {
     case "jpeg":
     case "jpg":
       return ImageType.Jpeg;
+    case "jxl":
+      return ImageType.JpegXL;
     case "png":
       return ImageType.Png;
     case "tiff":
@@ -314,3 +302,18 @@ function getPort(raw: string | undefined): number {
 }
 
 type QueryParams = Record<string, string | undefined>;
+
+function notFoundHandler(_req: FastifyRequest, reply: FastifyReply) {
+  reply.code(404);
+  return reply.send("404 Not Found");
+}
+
+function errorHandler(err: unknown, _req: FastifyRequest, reply: FastifyReply) {
+  if (err instanceof HttpError) {
+    reply.code(err.code);
+    return reply.send(err.body);
+  }
+
+  reply.code(500);
+  return reply.send("500 Internal server error");
+}

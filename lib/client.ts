@@ -1,10 +1,12 @@
+import { HttpError } from "./types.ts";
+
 export class Client {
   private timeout_ms: number;
   private body_limit_bytes: number;
 
-  constructor(timeout_ms: number, body_limit_bytes: number) {
-    this.timeout_ms = timeout_ms;
-    this.body_limit_bytes = body_limit_bytes;
+  constructor(ops: { timeout_ms: number; body_limit_bytes: number }) {
+    this.timeout_ms = ops.timeout_ms;
+    this.body_limit_bytes = ops.body_limit_bytes;
   }
 
   async fetch(url: string): Promise<Uint8Array> {
@@ -14,22 +16,21 @@ export class Client {
         signal: AbortSignal.timeout(this.timeout_ms),
       });
     } catch (err) {
-      throw new Response(`fetch: unable to make request: ${err}`, {
-        status: 400,
-      });
+      if (err instanceof Error) {
+        throw new HttpError(400, `fetch: unable to make request: ${err.message}`);
+      }
+      throw new HttpError(400, `fetch: unable to make request: ${err}`);
     }
 
     if (res.status < 200 || res.status >= 400) {
       if (res.status === 404) {
-        throw new Response(`fetch: not found`, { status: 404 });
+        throw new HttpError(404, "fetch: not found");
       }
-      throw new Response(`fetch: received status: ${res.status}`, {
-        status: 502,
-      });
+      throw new HttpError(502, `fetch: received status ${res.status}`);
     }
 
     if (!res.body) {
-      throw new Response("fetch: no body in response", { status: 400 });
+      throw new HttpError(400, "fetch: no body in response");
     }
 
     const reader = res.body.getReader();
@@ -41,7 +42,10 @@ export class Client {
       try {
         data = await reader.read();
       } catch (err) {
-        throw new Response(`fetch: reading body: ${err}`, { status: 400 });
+        if (err instanceof Error) {
+          throw new HttpError(502, `fetch: reading response body: ${err.message}`);
+        }
+        throw new HttpError(502, `fetch: reading response body: ${err}`);
       }
 
       if (data.done) break;
@@ -52,9 +56,10 @@ export class Client {
       if (receivedLength > this.body_limit_bytes) {
         // Stop the stream and the network request
         reader.cancel();
-        throw new Response(
-          `Response size limit of ${this.body_limit_bytes} bytes exceeded.`,
-          { status: 400 },
+        const limit = this.body_limit_bytes;
+        throw new HttpError(
+          400,
+          `fetch: response body size limit of ${limit} bytes exceeded`,
         );
       }
     }
