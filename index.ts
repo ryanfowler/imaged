@@ -8,5 +8,5 @@ console.log(`Sharp version ${ImageEngine.VERSIONS.sharp}`);
 console.log(`Vips verison ${ImageEngine.VERSIONS.vips}`);
 
 const server = new Server(client, engine);
-const serve = server.serve(process.env.PORT || 8000);
-console.log(`Listening on ${serve.url}`);
+const url = await server.serve(process.env.PORT);
+console.log(`Listening on ${url}`);

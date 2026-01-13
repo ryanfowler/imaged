@@ -114,3 +114,13 @@ export interface ExifData {
   // altitude?: number;
   // speed?: number;
 }
+
+export class HttpError {
+  code: number;
+  body?: Buffer | string;
+
+  constructor(code: number, body?: Buffer | string) {
+    this.code = code;
+    this.body = body;
+  }
+}

@@ -2,6 +2,8 @@ import type { Client } from "./client.ts";
 import type { ImageEngine } from "./image.ts";
 import { ImageFit, ImageKernel, ImagePosition, ImageType } from "./types.ts";
 
+import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
+
 export class Server {
   private client: Client;
   private engine: ImageEngine;
@@ -11,24 +13,23 @@ export class Server {
     this.engine = engine;
   }
 
-  serve(port: string | number): Bun.Server<undefined> {
-    return Bun.serve({
-      port,
-      routes: {
-        "/dynamic": httpWrap(this.dynamic),
-        "/metadata": httpWrap(this.metadata),
-      },
-      idleTimeout: 30,
-    });
+  async serve(port: string | undefined): Promise<string> {
+    const server = Fastify({});
+
+    server.get("/dynamic", this.dynamic);
+    server.get("/metadata", this.metadata);
+
+    return await server.listen({ port: getPort(port) });
   }
 
-  private dynamic = async (request: Request): Promise<Response> => {
-    if (request.method !== "GET") {
-      return resMethodNotAllowed;
-    }
+  private dynamic = async (request: FastifyRequest, reply: FastifyReply) => {
+    const params = request.query as QueryParams;
 
-    const params = new URL(request.url).searchParams;
-    const accept = request.headers.get("accept") ?? "";
+    const acceptHeader = request.headers["accept"];
+    const accept = Array.isArray(acceptHeader)
+      ? acceptHeader.join(",")
+      : (acceptHeader ?? "");
+
     const ops = parseImageOps(params, accept);
 
     const data = await this.client.fetch(ops.url);
@@ -49,34 +50,31 @@ export class Server {
       position: ops.position,
     });
 
-    return new Response(img.data, {
-      headers: {
-        "content-type": getMimetype(img.format),
-        "x-image-width": img.width.toString(),
-        "x-image-height": img.height.toString(),
-      },
-    });
+    reply
+      .header("content-type", getMimetype(img.format))
+      .header("x-image-width", String(img.width))
+      .header("x-image-height", String(img.height));
+    return reply.send(img.data);
   };
 
-  private metadata = async (request: Request): Promise<Response> => {
-    if (request.method !== "GET") {
-      return resMethodNotAllowed;
-    }
+  private metadata = async (request: FastifyRequest, reply: FastifyReply) => {
+    const params = (request.query as QueryParams) || {};
 
-    const params = new URL(request.url).searchParams;
-    const url = params.get("url");
+    const url = params["url"];
     if (!url) {
-      return new Response("missing 'url' query parameter", { status: 400 });
+      return reply.code(400).send("missing 'url' query parameter");
     }
 
     const data = await this.client.fetch(url);
+
     const res = await this.engine.metadata({
       data,
       exif: parseBoolean(params, "exif") || false,
       stats: parseBoolean(params, "stats") || false,
       thumbhash: parseBoolean(params, "thumbhash") || false,
     });
-    return Response.json(res);
+
+    return reply.send(res);
   };
 }
 
@@ -114,8 +112,8 @@ interface Options {
   position?: ImagePosition;
 }
 
-function parseImageOps(params: URLSearchParams, accept: string): Options {
-  const url = params.get("url");
+function parseImageOps(params: QueryParams, accept: string): Options {
+  const url = params["url"];
   if (!url) {
     throw new Response("missing 'url' query parameter", { status: 400 });
   }
@@ -139,8 +137,8 @@ function parseImageOps(params: URLSearchParams, accept: string): Options {
 
 const DEFAULT_FORMAT = ImageType.Jpeg;
 
-function parseFormat(params: URLSearchParams, accept: string): ImageType {
-  const v = params.get("format");
+function parseFormat(params: QueryParams, accept: string): ImageType {
+  const v = params["format"];
   if (v == null || v === "") {
     return DEFAULT_FORMAT;
   }
@@ -192,15 +190,15 @@ function parseFormat(params: URLSearchParams, accept: string): ImageType {
   return t;
 }
 
-function parseBoolean(params: URLSearchParams, key: string): boolean | undefined {
-  const v = params.get(key);
+function parseBoolean(params: QueryParams, key: string): boolean | undefined {
+  const v = params[key];
   if (v == null) {
     return undefined;
   }
   return v !== "false" && v !== "0";
 }
 
-function parseQuality(params: URLSearchParams): number | undefined {
+function parseQuality(params: QueryParams): number | undefined {
   const value = parseU32(params, "quality");
   if (value && (value < 1 || value > 100)) {
     return undefined;
@@ -208,8 +206,8 @@ function parseQuality(params: URLSearchParams): number | undefined {
   return value;
 }
 
-function parseU32(params: URLSearchParams, key: string): number | undefined {
-  const v = params.get(key);
+function parseU32(params: QueryParams, key: string): number | undefined {
+  const v = params[key];
   if (v == null || v === "") {
     return undefined;
   }
@@ -269,8 +267,8 @@ function getImageType(raw: string): ImageType | null {
 
 const IMAGE_FIT_SET = new Set<string>(Object.values(ImageFit));
 
-function parseImageFit(params: URLSearchParams): ImageFit | undefined {
-  const fit = params.get("fit");
+function parseImageFit(params: QueryParams): ImageFit | undefined {
+  const fit = params["fit"];
   if (fit == null) {
     return undefined;
   }
@@ -280,8 +278,8 @@ function parseImageFit(params: URLSearchParams): ImageFit | undefined {
 
 const IMAGE_KERNEL_SET = new Set<string>(Object.values(ImageKernel));
 
-function parseImageKernel(params: URLSearchParams): ImageKernel | undefined {
-  const kernel = params.get("kernel");
+function parseImageKernel(params: QueryParams): ImageKernel | undefined {
+  const kernel = params["kernel"];
   if (kernel == null) {
     return undefined;
   }
@@ -291,11 +289,28 @@ function parseImageKernel(params: URLSearchParams): ImageKernel | undefined {
 
 const IMAGE_POSITION_SET = new Set<string>(Object.values(ImagePosition));
 
-function parseImagePosition(params: URLSearchParams): ImagePosition | undefined {
-  const position = params.get("position");
+function parseImagePosition(params: QueryParams): ImagePosition | undefined {
+  const position = params["position"];
   if (position == null) {
     return undefined;
   }
 
   return IMAGE_POSITION_SET.has(position) ? (position as ImagePosition) : undefined;
 }
+
+function getPort(raw: string | undefined): number {
+  const defaultPort = 8000;
+
+  if (!raw) {
+    return defaultPort;
+  }
+
+  const port = Number.parseInt(raw, 10);
+  if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+    return defaultPort;
+  }
+
+  return port;
+}
+
+type QueryParams = Record<string, string | undefined>;
