@@ -389,3 +389,10 @@ function registerSignals(server: FastifyInstance) {
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
 }
+
+export function getRuntimeVersion() {
+  if (process.versions.bun) {
+    return `Bun ${process.versions.bun}`;
+  }
+  return `Node.js ${process.version}`;
+}
