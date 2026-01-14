@@ -2,6 +2,8 @@ import type { Client } from "./client.ts";
 import type { ImageEngine } from "./image.ts";
 import { HttpError, ImageFit, ImageKernel, ImagePosition, ImageType } from "./types.ts";
 
+import { readFileSync } from "node:fs";
+
 import Fastify, {
   type FastifyInstance,
   type FastifyReply,
@@ -17,7 +19,7 @@ export class Server {
     this.engine = engine;
   }
 
-  async serve(port: string | undefined): Promise<string> {
+  async serve(): Promise<string> {
     const server = Fastify({ keepAliveTimeout: 10_000 });
     server.setErrorHandler(errorHandler);
     server.setNotFoundHandler(notFoundHandler);
@@ -26,7 +28,7 @@ export class Server {
     server.get("/dynamic", this.dynamic);
     server.get("/metadata", this.metadata);
 
-    return await server.listen({ port: getPort(port) });
+    return await server.listen({ port: getPort(process.env.PORT) });
   }
 
   private dynamic = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -310,19 +312,42 @@ function parseImagePosition(params: QueryParams): ImagePosition | undefined {
   return IMAGE_POSITION_SET.has(position) ? (position as ImagePosition) : undefined;
 }
 
-function getPort(raw: string | undefined): number {
+export function getVersion(): string {
+  const pkgPath = new URL("./../package.json", import.meta.url);
+  const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
+  return pkg.version;
+}
+
+export function getPort(raw: string | undefined): number {
   const defaultPort = 8000;
 
+  const num = getEnvNum(raw, 8000);
+  if (num <= 0 || num > 65535) {
+    return defaultPort;
+  }
+  return num;
+}
+
+export function getConcurrency(): number {
+  const defaultCon = Math.ceil(navigator.hardwareConcurrency * 1.2);
+  const concurrency = getEnvNum(process.env.CONCURRENCY, defaultCon);
+  if (concurrency <= 0) {
+    return 1;
+  }
+  return concurrency;
+}
+
+function getEnvNum(raw: string | undefined, defaultNum: number): number {
   if (!raw) {
-    return defaultPort;
+    return defaultNum;
   }
 
-  const port = Number.parseInt(raw, 10);
-  if (!Number.isInteger(port) || port <= 0 || port > 65535) {
-    return defaultPort;
+  const num = Number.parseInt(raw, 10);
+  if (!Number.isInteger(num)) {
+    return defaultNum;
   }
 
-  return port;
+  return num;
 }
 
 type QueryParams = Record<string, string | undefined>;
