@@ -180,6 +180,14 @@ function applyFormat(
       });
     case ImageType.Gif:
       return img.gif({ effort: 4 });
+    case ImageType.Heic:
+      return img.heif({
+        compression: "hevc",
+        quality: ops.quality || 45,
+        effort: ops.effort || 2,
+        chromaSubsampling: "4:2:0",
+        lossless: ops.lossless,
+      });
     case ImageType.Jpeg:
       return img.jpeg({
         quality: ops.quality || 75,
@@ -354,9 +362,9 @@ export function detectImageFormat(buf: Uint8Array): ImageType {
     const brand = String.fromCharCode(buf[8]!, buf[9]!, buf[10]!, buf[11]!);
 
     if (brand.startsWith("avif")) return ImageType.Avif;
-    // if (brand.startsWith("heic")) return ImageType.HEIC;
-    // if (brand.startsWith("heix")) return ImageType.HEIC;
-    // if (brand.startsWith("hevc")) return ImageType.HEIC;
+    if (brand.startsWith("heic")) return ImageType.Heic;
+    if (brand.startsWith("heix")) return ImageType.Heic;
+    if (brand.startsWith("hevc")) return ImageType.Heic;
     // if (brand.startsWith("heif")) return ImageType.HEIF;
     // if (brand.startsWith("mif1")) return ImageType.HEIF;
   }

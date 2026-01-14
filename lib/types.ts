@@ -1,6 +1,7 @@
 export const ImageType = {
   Avif: "avif",
   Gif: "gif",
+  Heic: "heic",
   Jpeg: "jpeg",
   JpegXL: "jxl",
   Png: "png",

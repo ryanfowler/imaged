@@ -217,6 +217,8 @@ function getMimetype(format: ImageType): string {
       return "image/avif";
     case ImageType.Gif:
       return "image/gif";
+    case ImageType.Heic:
+      return "image/heic";
     case ImageType.Jpeg:
       return "image/jpeg";
     case ImageType.JpegXL:
@@ -236,6 +238,8 @@ function getImageType(raw: string): ImageType | null {
       return ImageType.Avif;
     case "gif":
       return ImageType.Gif;
+    case "heic":
+      return ImageType.Heic;
     case "jpeg":
     case "jpg":
       return ImageType.Jpeg;
