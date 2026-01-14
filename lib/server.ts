@@ -2,7 +2,11 @@ import type { Client } from "./client.ts";
 import type { ImageEngine } from "./image.ts";
 import { HttpError, ImageFit, ImageKernel, ImagePosition, ImageType } from "./types.ts";
 
-import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
+import Fastify, {
+  type FastifyInstance,
+  type FastifyReply,
+  type FastifyRequest,
+} from "fastify";
 
 export class Server {
   private client: Client;
@@ -17,6 +21,7 @@ export class Server {
     const server = Fastify({});
     server.setErrorHandler(errorHandler);
     server.setNotFoundHandler(notFoundHandler);
+    registerSignals(server);
 
     server.get("/dynamic", this.dynamic);
     server.get("/metadata", this.metadata);
@@ -323,4 +328,27 @@ function errorHandler(err: unknown, _req: FastifyRequest, reply: FastifyReply) {
 
   reply.code(500);
   return reply.send("500 Internal server error");
+}
+
+function registerSignals(server: FastifyInstance) {
+  const shutdown = async (signal: string) => {
+    console.log(`Received signal: ${signal}, shutting down`);
+
+    const forceExit = setTimeout(() => {
+      console.log("Timeout reached, forcing exit");
+      process.exit(1);
+    }, 10_000);
+
+    try {
+      await server.close();
+      clearTimeout(forceExit);
+      process.exit(0);
+    } catch (err) {
+      console.log(`Error shutting down: ${err}`);
+      process.exit(1);
+    }
+  };
+
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
 }
