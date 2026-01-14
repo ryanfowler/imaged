@@ -33,6 +33,9 @@ export class Server {
       : (acceptHeader ?? "");
 
     const ops = parseImageOps(params, accept);
+    if (!this.engine.encoders[ops.format]) {
+      throw new HttpError(400, `image: encoding type ${ops.format} is not supported`);
+    }
 
     const data = await this.client.fetch(ops.url);
 

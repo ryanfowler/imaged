@@ -25,14 +25,23 @@ export class ImageEngine {
     limitInputPixels: 50_000_000,
   };
 
+  decoders: { [K in ImageType]: boolean };
+  encoders: { [K in ImageType]: boolean };
+
   static VERSIONS = sharp.versions;
 
   constructor(concurrency: number) {
     this.sema = new Semaphore(concurrency);
+
+    this.decoders = parseDecoders();
+    this.encoders = parseEncoders();
   }
 
   async perform(ops: ImageOptions): Promise<ImageResult> {
-    const _input = detectImageFormat(ops.data);
+    const input = detectImageFormat(ops.data);
+    if (!this.decoders[input]) {
+      throw new HttpError(400, `image: decoding type ${input} is not supported`);
+    }
 
     await this.sema.acquire();
     try {
@@ -91,11 +100,14 @@ export class ImageEngine {
   }
 
   async metadata(ops: MetadataOptions): Promise<MetadataResult> {
-    const _input = detectImageFormat(ops.data);
+    const input = detectImageFormat(ops.data);
+    if (!this.decoders[input]) {
+      throw new HttpError(400, `image: decoding type ${input} is not supported`);
+    }
 
     await this.sema.acquire();
     try {
-      return await this.metadataInner(ops);
+      return await this.metadataInner(input, ops);
     } catch (err) {
       if (err instanceof Error) {
         throw new HttpError(400, `image: ${err.message}`);
@@ -106,7 +118,10 @@ export class ImageEngine {
     }
   }
 
-  private async metadataInner(ops: MetadataOptions): Promise<MetadataResult> {
+  private async metadataInner(
+    input: ImageType,
+    ops: MetadataOptions,
+  ): Promise<MetadataResult> {
     const img = sharp(ops.data, ImageEngine.DEFAULT_OPS);
     const meta = await img.metadata();
 
@@ -143,17 +158,8 @@ export class ImageEngine {
       thumbhash = Buffer.from(rawThumbhash).toString("base64");
     }
 
-    let format: string = meta.format;
-    if (format === "heif") {
-      if (meta.compression === "av1") {
-        format = "avif";
-      } else if (meta.compression === "hevc") {
-        format = "heic";
-      }
-    }
-
     return {
-      format,
+      format: input,
       width: meta.autoOrient.width || meta.width,
       height: meta.autoOrient.height || meta.height,
       size: ops.data.length,
@@ -196,6 +202,7 @@ function applyFormat(
     case ImageType.JpegXL:
       return img.jxl({
         quality: ops.quality,
+        distance: 3,
         effort: 5,
         lossless: ops.lossless,
       });
@@ -296,9 +303,9 @@ export function detectImageFormat(buf: Uint8Array): ImageType {
   }
 
   // GIF
-  // if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x38) {
-  //   return ImageType.Gif;
-  // }
+  if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x38) {
+    return ImageType.Gif;
+  }
 
   // WebP
   if (
@@ -360,7 +367,6 @@ export function detectImageFormat(buf: Uint8Array): ImageType {
     buf[7] === 0x70
   ) {
     const brand = String.fromCharCode(buf[8]!, buf[9]!, buf[10]!, buf[11]!);
-
     if (brand.startsWith("avif")) return ImageType.Avif;
     if (brand.startsWith("heic")) return ImageType.Heic;
     if (brand.startsWith("heix")) return ImageType.Heic;
@@ -376,4 +382,33 @@ export function detectImageFormat(buf: Uint8Array): ImageType {
   // }
 
   throw new HttpError(400, "image: unknown image type");
+}
+
+function parseDecoders(): { [K in ImageType]: boolean } {
+  const f = sharp.format;
+  return {
+    avif:
+      (f.heif?.input.buffer && f.heif?.input.fileSuffix?.includes(".avif")) || false,
+    gif: f.gif?.input.buffer || false,
+    heic: (f.heif.input.buffer && f.heif.input.fileSuffix?.includes(".heic")) || false,
+    jpeg: f.jpeg?.input.buffer || false,
+    jxl: f.jxl?.input.buffer || false,
+    png: f.png?.input.buffer || false,
+    tiff: f.tiff?.input.buffer || false,
+    webp: f.webp?.input.buffer || false,
+  };
+}
+
+function parseEncoders(): { [K in ImageType]: boolean } {
+  const f = sharp.format;
+  return {
+    avif: (f.heif?.output.buffer && f.heif?.output.alias?.includes("avif")) || false,
+    gif: f.gif?.output.buffer || false,
+    heic: (f.heif?.output.buffer && f.heif?.output.alias?.includes("heic")) || false,
+    jpeg: f.jpeg?.output.buffer || false,
+    jxl: f.jxl?.output.buffer || false,
+    png: f.png?.output.buffer || false,
+    tiff: f.tiff?.output.buffer || false,
+    webp: f.webp?.output.buffer || false,
+  };
 }
