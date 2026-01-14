@@ -206,8 +206,14 @@ function applyFormat(
         effort: 5,
         lossless: ops.lossless,
       });
+    case ImageType.Pdf:
+      throw new HttpError(400, "image: encoding type pdf is not supported");
     case ImageType.Png:
       return img.png({ quality: ops.quality || 75 });
+    case ImageType.Raw:
+      return img.raw();
+    case ImageType.Svg:
+      throw new HttpError(400, "image: encoding type svg is not supported");
     case ImageType.Tiff:
       return img.tiff({ quality: ops.quality || 75 });
     case ImageType.Webp:
@@ -375,13 +381,55 @@ export function detectImageFormat(buf: Uint8Array): ImageType {
     // if (brand.startsWith("mif1")) return ImageType.HEIF;
   }
 
+  // PDF
+  if (
+    buf[0] === 0x25 && // %
+    buf[1] === 0x50 && // P
+    buf[2] === 0x44 && // D
+    buf[3] === 0x46 && // F
+    buf[4] === 0x2d // -
+  ) {
+    return ImageType.Pdf;
+  }
+
   // SVG
-  // const header = buf.subarray(0, 200).toString().trim();
-  // if (header.startsWith("<svg") || header.includes("<svg")) {
-  //   return ImageType.Svg;
-  // }
+  if (isLikelySvg(buf)) {
+    return ImageType.Svg;
+  }
 
   throw new HttpError(400, "image: unknown image type");
+}
+
+const ASCII_WHITESPACE = new Set([0x09, 0x0a, 0x0c, 0x0d, 0x20]); // \t \n \f \r space
+
+function isLikelySvg(buf: Uint8Array): boolean {
+  const max = Math.min(buf.length, 4096);
+
+  const dec = new TextDecoder("utf-8", { fatal: false });
+  let s = dec.decode(buf.subarray(0, max));
+
+  // Strip UTF-8 BOM if present.
+  if (s.charCodeAt(0) === 0xfeff) s = s.slice(1);
+
+  // If the first chunk contains lots of NULs, it's probably binary.
+  const nulCount = (s.match(/\u0000/g) || []).length;
+  if (nulCount > 0) return false;
+
+  // Find the first "<" that begins something meaningful (skip leading whitespace).
+  // Then accept common preambles before <svg>.
+  // We'll search for "<svg" but only if it appears before an "<html" (avoid HTML docs with inline svg).
+  const lower = s.toLowerCase();
+  const svgIdx = lower.indexOf("<svg");
+  if (svgIdx === -1) return false;
+
+  const htmlIdx = lower.indexOf("<html");
+  if (htmlIdx !== -1 && htmlIdx < svgIdx) return false;
+
+  // Also avoid mistaking random text that contains "<svg" deep inside after huge headers.
+  // Ensure it's reasonably near the start (after optional XML/doctype/comments).
+  if (svgIdx > 1024) return false;
+
+  return true;
 }
 
 function parseDecoders(): { [K in ImageType]: boolean } {
@@ -393,7 +441,10 @@ function parseDecoders(): { [K in ImageType]: boolean } {
     heic: (f.heif.input.buffer && f.heif.input.fileSuffix?.includes(".heic")) || false,
     jpeg: f.jpeg?.input.buffer || false,
     jxl: f.jxl?.input.buffer || false,
+    pdf: f.pdf?.input.buffer || false,
     png: f.png?.input.buffer || false,
+    raw: false,
+    svg: f.svg?.input.buffer || false,
     tiff: f.tiff?.input.buffer || false,
     webp: f.webp?.input.buffer || false,
   };
@@ -407,7 +458,10 @@ function parseEncoders(): { [K in ImageType]: boolean } {
     heic: (f.heif?.output.buffer && f.heif?.output.alias?.includes("heic")) || false,
     jpeg: f.jpeg?.output.buffer || false,
     jxl: f.jxl?.output.buffer || false,
+    pdf: false,
     png: f.png?.output.buffer || false,
+    raw: f.raw?.output.buffer || false,
+    svg: false,
     tiff: f.tiff?.output.buffer || false,
     webp: f.webp?.output.buffer || false,
   };

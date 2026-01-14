@@ -18,7 +18,7 @@ export class Server {
   }
 
   async serve(port: string | undefined): Promise<string> {
-    const server = Fastify({});
+    const server = Fastify({ keepAliveTimeout: 10_000 });
     server.setErrorHandler(errorHandler);
     server.setNotFoundHandler(notFoundHandler);
     registerSignals(server);
@@ -233,6 +233,12 @@ function getMimetype(format: ImageType): string {
       return "image/jxl";
     case ImageType.Png:
       return "image/png";
+    case ImageType.Pdf:
+      return "application/pdf";
+    case ImageType.Raw:
+      return "application/octet-stream";
+    case ImageType.Svg:
+      return "image/svg+xml";
     case ImageType.Tiff:
       return "image/tiff";
     case ImageType.Webp:
@@ -253,8 +259,14 @@ function getImageType(raw: string): ImageType | null {
       return ImageType.Jpeg;
     case "jxl":
       return ImageType.JpegXL;
+    case "pdf":
+      return ImageType.Pdf;
     case "png":
       return ImageType.Png;
+    case "raw":
+      return ImageType.Raw;
+    case "svg":
+      return ImageType.Svg;
     case "tiff":
     case "tif":
       return ImageType.Tiff;

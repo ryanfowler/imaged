@@ -4,7 +4,10 @@ export const ImageType = {
   Heic: "heic",
   Jpeg: "jpeg",
   JpegXL: "jxl",
+  Pdf: "pdf",
   Png: "png",
+  Raw: "raw",
+  Svg: "svg",
   Tiff: "tiff",
   Webp: "webp",
 } as const;
