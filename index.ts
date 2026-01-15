@@ -4,7 +4,7 @@ import { getConcurrency, getRuntimeVersion, getVersion, Server } from "./lib/ser
 
 const bodyLimit = 1 << 24;
 const concurrency = getConcurrency();
-const client = new Client({ timeoutMs: 10_000, bodyLimitBytes: bodyLimit });
+const client = new Client({ timeoutMs: 10_000, bodyLimit: bodyLimit });
 const engine = new ImageEngine(concurrency);
 console.log(`Version: ${getVersion()}`);
 console.log(`Runtime: ${getRuntimeVersion()}`);

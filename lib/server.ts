@@ -31,10 +31,13 @@ export class Server {
       done(null, body);
     });
 
-    server.get("/dynamic", this.dynamicGet);
     server.put("/dynamic", this.dynamicPut);
-    server.get("/metadata", this.metadataGet);
     server.put("/metadata", this.metadataPut);
+
+    if (!fetchDisabled()) {
+      server.get("/dynamic", this.dynamicGet);
+      server.get("/metadata", this.metadataGet);
+    }
 
     return await server.listen({ port: getPort(process.env.PORT) });
   }
@@ -446,4 +449,9 @@ export function getRuntimeVersion() {
     return `Bun ${process.versions.bun}`;
   }
   return `Node.js ${process.version}`;
+}
+
+function fetchDisabled(): boolean {
+  const e = process.env.DISABLE_FETCH;
+  return e === "1" || e === "true" || e === "TRUE";
 }
