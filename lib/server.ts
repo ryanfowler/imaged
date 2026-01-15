@@ -13,25 +13,55 @@ import Fastify, {
 export class Server {
   private client: Client;
   private engine: ImageEngine;
+  private bodyLimit: number;
 
-  constructor(client: Client, engine: ImageEngine) {
+  constructor(client: Client, engine: ImageEngine, bodyLimitBytes: number) {
     this.client = client;
     this.engine = engine;
+    this.bodyLimit = bodyLimitBytes;
   }
 
   async serve(): Promise<string> {
-    const server = Fastify({ keepAliveTimeout: 10_000 });
+    const server = Fastify({ bodyLimit: this.bodyLimit, keepAliveTimeout: 10_000 });
     server.setErrorHandler(errorHandler);
     server.setNotFoundHandler(notFoundHandler);
     registerSignals(server);
 
-    server.get("/dynamic", this.dynamic);
-    server.get("/metadata", this.metadata);
+    server.addContentTypeParser("*", { parseAs: "buffer" }, (_, body, done) => {
+      done(null, body);
+    });
+
+    server.get("/dynamic", this.dynamicGet);
+    server.put("/dynamic", this.dynamicPut);
+    server.get("/metadata", this.metadataGet);
+    server.put("/metadata", this.metadataPut);
 
     return await server.listen({ port: getPort(process.env.PORT) });
   }
 
-  private dynamic = async (request: FastifyRequest, reply: FastifyReply) => {
+  private dynamicGet = async (request: FastifyRequest, reply: FastifyReply) => {
+    const params = request.query as QueryParams;
+
+    const url = params["url"];
+    if (!url) {
+      throw new HttpError(400, "missing 'url' query parameter");
+    }
+
+    const acceptHeader = request.headers["accept"];
+    const accept = Array.isArray(acceptHeader)
+      ? acceptHeader.join(",")
+      : (acceptHeader ?? "");
+
+    const ops = parseImageOps(params, accept);
+    if (!this.engine.encoders[ops.format]) {
+      throw new HttpError(400, `image: encoding type ${ops.format} is not supported`);
+    }
+
+    const data = await this.client.fetch(url);
+    await this.performDynamic(reply, data, ops);
+  };
+
+  private dynamicPut = async (request: FastifyRequest, reply: FastifyReply) => {
     const params = request.query as QueryParams;
 
     const acceptHeader = request.headers["accept"];
@@ -44,8 +74,18 @@ export class Server {
       throw new HttpError(400, `image: encoding type ${ops.format} is not supported`);
     }
 
-    const data = await this.client.fetch(ops.url);
+    if (!Buffer.isBuffer(request.body)) {
+      throw new HttpError(400, "image data must be provided in the request body");
+    }
 
+    await this.performDynamic(reply, request.body, ops);
+  };
+
+  private performDynamic = async (
+    reply: FastifyReply,
+    data: Uint8Array,
+    ops: Options,
+  ) => {
     const img = await this.engine.perform({
       data,
       format: ops.format,
@@ -69,7 +109,7 @@ export class Server {
     return reply.send(img.data);
   };
 
-  private metadata = async (request: FastifyRequest, reply: FastifyReply) => {
+  private metadataGet = async (request: FastifyRequest, reply: FastifyReply) => {
     const params = (request.query as QueryParams) || {};
 
     const url = params["url"];
@@ -79,6 +119,24 @@ export class Server {
 
     const data = await this.client.fetch(url);
 
+    await this.metadata(reply, data, params);
+  };
+
+  private metadataPut = async (request: FastifyRequest, reply: FastifyReply) => {
+    const params = (request.query as QueryParams) || {};
+
+    if (!Buffer.isBuffer(request.body)) {
+      throw new HttpError(400, "image data must be provided in the request body");
+    }
+
+    await this.metadata(reply, request.body, params);
+  };
+
+  private metadata = async (
+    reply: FastifyReply,
+    data: Uint8Array,
+    params: QueryParams,
+  ) => {
     const res = await this.engine.metadata({
       data,
       exif: parseBoolean(params, "exif") || false,
@@ -91,7 +149,6 @@ export class Server {
 }
 
 interface Options {
-  url: string;
   format: ImageType;
   width?: number;
   height?: number;
@@ -107,13 +164,7 @@ interface Options {
 }
 
 function parseImageOps(params: QueryParams, accept: string): Options {
-  const url = params["url"];
-  if (!url) {
-    throw new Response("missing 'url' query parameter", { status: 400 });
-  }
-
   return {
-    url,
     format: parseFormat(params, accept),
     width: parseU32(params, "width"),
     height: parseU32(params, "height"),

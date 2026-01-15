@@ -4,9 +4,9 @@ export class Client {
   private timeout_ms: number;
   private body_limit_bytes: number;
 
-  constructor(ops: { timeout_ms: number; body_limit_bytes: number }) {
-    this.timeout_ms = ops.timeout_ms;
-    this.body_limit_bytes = ops.body_limit_bytes;
+  constructor(ops: { timeoutMs: number; bodyLimitBytes: number }) {
+    this.timeout_ms = ops.timeoutMs;
+    this.body_limit_bytes = ops.bodyLimitBytes;
   }
 
   async fetch(url: string): Promise<Uint8Array> {
