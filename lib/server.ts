@@ -15,6 +15,9 @@ export class Server {
   private engine: ImageEngine;
   private bodyLimit: number;
 
+  static VERSION = getVersion();
+  static RUNTIME_VERSION = getRuntimeVersion();
+
   constructor(client: Client, engine: ImageEngine, bodyLimitBytes: number) {
     this.client = client;
     this.engine = engine;
@@ -31,6 +34,7 @@ export class Server {
       done(null, body);
     });
 
+    server.get("/healthz", this.healthz);
     server.put("/dynamic", this.dynamicPut);
     server.put("/metadata", this.metadataPut);
 
@@ -148,6 +152,13 @@ export class Server {
     });
 
     return reply.send(res);
+  };
+
+  private healthz = async (request: FastifyRequest, reply: FastifyReply) => {
+    reply.send({
+      version: Server.VERSION,
+      runtime: Server.RUNTIME_VERSION,
+    });
   };
 }
 
