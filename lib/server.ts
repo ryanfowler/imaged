@@ -2,7 +2,9 @@ import type { Client } from "./client.ts";
 import type { ImageEngine } from "./image.ts";
 import { HttpError, ImageFit, ImageKernel, ImagePosition, ImageType } from "./types.ts";
 
-import { readFileSync } from "node:fs";
+import fs from "node:fs";
+import fsp from "node:fs/promises";
+import path from "node:path";
 
 import Fastify, {
   type FastifyInstance,
@@ -25,6 +27,10 @@ export class Server {
   }
 
   async serve(): Promise<string> {
+    if (process.env.UNIX) {
+      await ensureUnixSocketReady(process.env.UNIX);
+    }
+
     const server = Fastify({ bodyLimit: this.bodyLimit, keepAliveTimeout: 10_000 });
     server.setErrorHandler(errorHandler);
     server.setNotFoundHandler(notFoundHandler);
@@ -43,7 +49,11 @@ export class Server {
       server.get("/metadata", this.metadataGet);
     }
 
-    return await server.listen({ port: getPort(process.env.PORT) });
+    return await server.listen({
+      host: process.env.HOST,
+      port: process.env.UNIX ? undefined : getPort(process.env.PORT),
+      path: process.env.UNIX,
+    });
   }
 
   private dynamicGet = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -154,7 +164,7 @@ export class Server {
     return reply.send(res);
   };
 
-  private healthz = async (request: FastifyRequest, reply: FastifyReply) => {
+  private healthz = async (_: FastifyRequest, reply: FastifyReply) => {
     reply.send({
       version: Server.VERSION,
       runtime: Server.RUNTIME_VERSION,
@@ -379,7 +389,7 @@ function parseImagePosition(params: QueryParams): ImagePosition | undefined {
 
 export function getVersion(): string {
   const pkgPath = new URL("./../package.json", import.meta.url);
-  const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
   return pkg.version;
 }
 
@@ -432,6 +442,33 @@ function errorHandler(err: unknown, _req: FastifyRequest, reply: FastifyReply) {
   return reply.send("500 Internal server error");
 }
 
+async function ensureUnixSocketReady(socketPath: string) {
+  const dir = path.dirname(socketPath);
+  await fsp.mkdir(dir, { recursive: true });
+
+  // If something already exists at the path:
+  // - If it's a socket, remove it (stale from a crash)
+  // - Otherwise, refuse (avoid clobbering a real file)
+  try {
+    const st = await fsp.lstat(socketPath);
+    if (!st.isSocket()) {
+      throw new Error(
+        `Refusing to overwrite existing non-socket at UNIX path: ${socketPath}`,
+      );
+    }
+    await fsp.unlink(socketPath);
+  } catch (err) {
+    if (
+      err &&
+      err instanceof Error &&
+      typeof (err as NodeJS.ErrnoException).code === "string"
+    ) {
+      return;
+    }
+    throw err;
+  }
+}
+
 function registerSignals(server: FastifyInstance) {
   const shutdown = async (signal: string) => {
     console.log(`Received signal: ${signal}, shutting down`);
@@ -444,10 +481,17 @@ function registerSignals(server: FastifyInstance) {
     try {
       await server.close();
       clearTimeout(forceExit);
-      process.exit(0);
     } catch (err) {
       console.log(`Error shutting down: ${err}`);
-      process.exit(1);
+      process.exitCode = 1;
+    } finally {
+      if (process.env.UNIX) {
+        const st = fs.existsSync(process.env.UNIX)
+          ? fs.lstatSync(process.env.UNIX)
+          : null;
+        if (st && st.isSocket()) fs.unlinkSync(process.env.UNIX);
+      }
+      process.exit();
     }
   };
 
