@@ -72,6 +72,29 @@ export interface ImageOptions {
   fit?: ImageFit;
   kernel?: ImageKernel;
   position?: ImagePosition;
+  preset?: ImagePreset;
+}
+
+export const IMAGE_PRESETS = ["auto", "fast", "quality", "size"] as const;
+export type ImagePreset = (typeof IMAGE_PRESETS)[number];
+
+export interface PresetOptions {
+  quality?: number;
+  progressive?: boolean;
+  chromaSubsampling?: string;
+  mozjpeg?: boolean;
+  effort?: number;
+  smartSubsample?: boolean;
+  smartDeblock?: boolean;
+  alphaQuality?: number;
+  decodingTeir?: number;
+  compressionLevel?: number;
+  adaptiveFiltering?: boolean;
+  palette?: boolean;
+  colours?: number;
+  compression?: string;
+  predictor?: string;
+  reoptimise?: boolean;
 }
 
 export interface ImageResult {

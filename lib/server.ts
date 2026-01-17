@@ -1,6 +1,14 @@
 import type { Client } from "./client.ts";
 import type { ImageEngine } from "./image.ts";
-import { HttpError, ImageFit, ImageKernel, ImagePosition, ImageType } from "./types.ts";
+import {
+  HttpError,
+  IMAGE_PRESETS,
+  ImageFit,
+  ImageKernel,
+  ImagePosition,
+  type ImagePreset,
+  ImageType,
+} from "./types.ts";
 
 import fs from "node:fs";
 import fsp from "node:fs/promises";
@@ -117,6 +125,7 @@ export class Server {
       fit: ops.fit,
       kernel: ops.kernel,
       position: ops.position,
+      preset: ops.preset,
     });
 
     reply
@@ -185,6 +194,7 @@ interface Options {
   fit?: ImageFit;
   kernel?: ImageKernel;
   position?: ImagePosition;
+  preset?: ImagePreset;
 }
 
 function parseImageOps(params: QueryParams, accept: string): Options {
@@ -201,6 +211,7 @@ function parseImageOps(params: QueryParams, accept: string): Options {
     fit: parseImageFit(params),
     kernel: parseImageKernel(params),
     position: parseImagePosition(params),
+    preset: parseImagePreset(params),
   };
 }
 
@@ -385,6 +396,17 @@ function parseImagePosition(params: QueryParams): ImagePosition | undefined {
   }
 
   return IMAGE_POSITION_SET.has(position) ? (position as ImagePosition) : undefined;
+}
+
+const IMAGE_PRESET_SET = new Set<string>(IMAGE_PRESETS);
+
+function parseImagePreset(params: QueryParams): ImagePreset | undefined {
+  const preset = params["preset"];
+  if (preset == null) {
+    return undefined;
+  }
+
+  return IMAGE_PRESET_SET.has(preset) ? (preset as ImagePreset) : undefined;
 }
 
 export function getVersion(): string {

@@ -1,4 +1,5 @@
 import { getExif } from "./exif.ts";
+import { getPreset } from "./presets.ts";
 import { Semaphore } from "./semaphore.ts";
 import {
   HttpError,
@@ -176,12 +177,13 @@ function applyFormat(
   width: number,
   height: number,
 ): sharp.Sharp {
+  const preset = getPreset(ops.format, ops.preset);
   switch (ops.format) {
     case ImageType.Avif:
       return img.avif({
-        quality: ops.quality || 45,
-        effort: ops.effort || 2,
-        chromaSubsampling: "4:2:0",
+        quality: ops.quality || preset.quality,
+        effort: ops.effort || preset.effort,
+        chromaSubsampling: preset.chromaSubsampling,
         lossless: ops.lossless,
       });
     case ImageType.Gif:
@@ -189,38 +191,55 @@ function applyFormat(
     case ImageType.Heic:
       return img.heif({
         compression: "hevc",
-        quality: ops.quality || 45,
-        effort: ops.effort || 2,
-        chromaSubsampling: "4:2:0",
+        quality: ops.quality || preset.quality,
+        effort: ops.effort || preset.effort,
+        chromaSubsampling: preset.chromaSubsampling,
         lossless: ops.lossless,
       });
     case ImageType.Jpeg:
       return img.jpeg({
-        quality: ops.quality || 75,
-        progressive: getProgressiveValue(width, height, ops.progressive),
+        quality: ops.quality || preset.quality,
+        progressive:
+          getProgressiveValue(width, height, ops.progressive) || preset.progressive,
+        chromaSubsampling: preset.chromaSubsampling,
+        mozjpeg: preset.mozjpeg,
       });
     case ImageType.JpegXL:
       return img.jxl({
-        quality: ops.quality,
-        distance: 3,
-        effort: 5,
+        quality: ops.quality || preset.quality,
+        effort: preset.effort,
+        decodingTier: preset.decodingTeir,
         lossless: ops.lossless,
       });
     case ImageType.Pdf:
       throw new HttpError(400, "image: encoding type pdf is not supported");
     case ImageType.Png:
-      return img.png({ quality: ops.quality || 75 });
+      return img.png({
+        quality: ops.quality,
+        compressionLevel: preset.compressionLevel,
+        adaptiveFiltering: preset.adaptiveFiltering,
+        palette: preset.palette,
+        effort: preset.effort,
+        colours: preset.colours,
+      });
     case ImageType.Raw:
       return img.raw();
     case ImageType.Svg:
       throw new HttpError(400, "image: encoding type svg is not supported");
     case ImageType.Tiff:
-      return img.tiff({ quality: ops.quality || 75 });
+      return img.tiff({
+        quality: ops.quality || preset.quality,
+        compression: preset.compression,
+        predictor: preset.predictor,
+      });
     case ImageType.Webp:
       return img.webp({
-        quality: ops.quality || 75,
+        quality: ops.quality || preset.quality,
         lossless: ops.lossless,
-        effort: ops.effort || 4,
+        effort: ops.effort || preset.effort,
+        smartSubsample: preset.smartSubsample,
+        smartDeblock: preset.smartDeblock,
+        alphaQuality: preset.alphaQuality,
       });
   }
 }
