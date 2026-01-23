@@ -1,4 +1,5 @@
 .DS_Store
 .env
-/data
+/dist
+/node_modules
 /target
