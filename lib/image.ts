@@ -401,7 +401,8 @@ function parseDecoders(): ImageType[] {
     avif:
       (f.heif?.input.buffer && f.heif?.input.fileSuffix?.includes(".avif")) || false,
     gif: f.gif?.input.buffer || false,
-    heic: (f.heif.input.buffer && f.heif.input.fileSuffix?.includes(".heic")) || false,
+    heic:
+      (f.heif?.input.buffer && f.heif?.input.fileSuffix?.includes(".heic")) || false,
     jpeg: f.jpeg?.input.buffer || false,
     jxl: f.jxl?.input.buffer || false,
     pdf: f.pdf?.input.buffer || false,
