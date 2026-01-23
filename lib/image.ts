@@ -14,7 +14,10 @@ import sharp from "sharp";
 import { rgbaToThumbHash } from "thumbhash";
 
 sharp.cache(false);
-sharp.concurrency(1);
+
+if (process.env["VIPS_CONCURRENCY"] === undefined) {
+  sharp.concurrency(1);
+}
 
 export interface ImageEngineOptions {
   concurrency: number;
