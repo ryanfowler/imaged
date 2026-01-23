@@ -7,7 +7,7 @@ Built with [Bun](https://bun.sh) and powered by [Sharp](https://sharp.pixelplumb
 ## Features
 
 - **Transform images** — Resize, crop, blur, convert to greyscale, and change formats
-- **Extract metadata** — Dimensions, EXIF data (camera, GPS, settings), image statistics, and [thumbhash](https://evanw.github.io/thumbhash/) placeholders
+- **Extract metadata** — Dimensions, EXIF data, image statistics, and [thumbhash](https://evanw.github.io/thumbhash/) placeholders
 - **Wide format support** — AVIF, GIF, HEIC, JPEG, JPEG XL, PNG, SVG, TIFF, and WebP
 - **Production ready** — Configurable concurrency, request limits, TLS, and structured logging
 
