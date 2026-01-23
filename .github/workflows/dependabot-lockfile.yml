@@ -24,7 +24,7 @@ jobs:
           bun-version: latest
 
       - name: Regenerate bun.lock
-        run: bun install --frozen-lockfile=false
+        run: bun install
 
       - name: Commit updated lockfile
         run: |
