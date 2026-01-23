@@ -293,9 +293,14 @@ bun run index.ts --tls-cert cert.pem --tls-key key.pem
 ## Docker
 
 ```bash
-make build    # Build the container
-make start    # Start on port 8000
-make stop     # Stop the container
+make build    # Build the image
+make run      # Start the server
+```
+
+To pass arguments to the container:
+
+```bash
+make run ARGS="--port=3000"
 ```
 
 ## Using System libvips
