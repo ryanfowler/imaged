@@ -30,31 +30,6 @@ curl -X PUT "http://localhost:8000/metadata?exif=true" \
   --data-binary @photo.jpg
 ```
 
-## Performance
-
-Image processing is memory-intensive. For production deployments, use a high-performance allocator like [mimalloc](https://github.com/microsoft/mimalloc) or [jemalloc](https://github.com/jemalloc/jemalloc) to reduce memory fragmentation and improve throughput.
-
-**macOS:**
-
-```bash
-brew install mimalloc
-DYLD_INSERT_LIBRARIES=/opt/homebrew/lib/libmimalloc.dylib bun run index.ts
-```
-
-**Linux (Debian/Ubuntu):**
-
-```bash
-sudo apt install libmimalloc2
-LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libmimalloc.so bun run index.ts
-```
-
-**Linux (Alpine):**
-
-```bash
-apk add mimalloc
-LD_PRELOAD=/usr/lib/libmimalloc.so bun run index.ts
-```
-
 ## CLI Options
 
 | Flag                          | Description                                 | Default     |
@@ -289,6 +264,43 @@ Enable HTTPS by providing a certificate and private key:
 ```bash
 bun run index.ts --tls-cert cert.pem --tls-key key.pem
 ```
+
+## Performance
+
+Image processing is memory-intensive. For production deployments, use a high-performance allocator like [mimalloc](https://github.com/microsoft/mimalloc) or [jemalloc](https://github.com/jemalloc/jemalloc) to reduce memory fragmentation and improve throughput.
+
+**macOS:**
+
+```bash
+brew install mimalloc
+DYLD_INSERT_LIBRARIES=/opt/homebrew/lib/libmimalloc.dylib bun run index.ts
+```
+
+**Linux (Debian/Ubuntu):**
+
+```bash
+sudo apt install libmimalloc2
+LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libmimalloc.so bun run index.ts
+```
+
+**Linux (Alpine):**
+
+```bash
+apk add mimalloc
+LD_PRELOAD=/usr/lib/libmimalloc.so bun run index.ts
+```
+
+If using [mimalloc](https://github.com/microsoft/mimalloc), you may want to investigate the following environment variables for your use case:
+
+- `MIMALLOC_ALLOW_LARGE_OS_PAGES`
+- `MIMALLOC_SEGMENT_CACHE`
+- `MIMALLOC_PAGE_RESET`
+- `MIMALLOC_PURGE_DELAY`
+
+For libvips, you may be interested in the following environment variables:
+
+- `VIPS_DISC_THRESHOLD`
+- `VIPS_CONCURRENCY` (default of `1` used in imaged)
 
 ## Docker
 
