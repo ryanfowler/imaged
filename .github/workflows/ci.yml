@@ -6,11 +6,17 @@ on:
   push:
     branches: ["main"]
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
@@ -18,7 +24,17 @@ jobs:
           bun-version: latest
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bun install
+
+      # For Dependabot PRs, commit updated lockfile if changed
+      - name: Update lockfile for Dependabot
+        if: github.actor == 'dependabot[bot]'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add bun.lock
+          git diff --staged --quiet || git commit -m "chore: update bun.lock"
+          git push
 
       - name: Check formatting
         run: bunx prettier . --check
