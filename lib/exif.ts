@@ -12,6 +12,11 @@ export function getExif(raw: Buffer): ExifData {
     software: data.Image?.Software,
     lens_make: data.Photo?.LensMake,
     lens_model: data.Photo?.LensModel,
+    lens_serial: data.Photo?.LensSerialNumber,
+    body_serial: getString(
+      data.Photo?.BodySerialNumber ?? data.Image?.["SerialNumber"],
+    ),
+    unique_id: data.Photo?.ImageUniqueID,
 
     // Capture settings
     datetime: getDate(data),
@@ -27,6 +32,15 @@ export function getExif(raw: Buffer): ExifData {
     metering_mode: getMeteringModeStr(data.Photo?.MeteringMode),
     white_balance: getWhiteBalanceStr(data.Photo?.WhiteBalance),
     color_space: getColorSpaceStr(data.Photo?.ColorSpace),
+    brightness: getNumber(data.Photo?.BrightnessValue),
+    max_aperture: getNumber(data.Photo?.MaxApertureValue),
+    subject_distance: getNumber(data.Photo?.SubjectDistance),
+    light_source: getLightSourceStr(data.Photo?.LightSource),
+    scene_capture_type: getSceneCaptureTypeStr(data.Photo?.SceneCaptureType),
+    contrast: getContrastStr(data.Photo?.Contrast),
+    saturation: getSaturationStr(data.Photo?.Saturation),
+    sharpness: getSharpnessStr(data.Photo?.Sharpness),
+    digital_zoom: getDigitalZoom(data.Photo?.DigitalZoomRatio),
 
     // GPS
     latitude: getLatitude(data),
@@ -34,11 +48,14 @@ export function getExif(raw: Buffer): ExifData {
     altitude: getAltitude(data),
     speed: getSpeed(data),
     direction: getDirection(data),
+    gps_timestamp: getGpsTimestamp(data),
 
     // Metadata
     description: data.Image?.ImageDescription,
     artist: data.Image?.Artist,
     copyright: data.Image?.Copyright,
+    user_comment: getUserComment(data.Photo?.UserComment),
+    rating: getRating(data.Image?.Rating),
   };
 }
 
@@ -47,6 +64,16 @@ function getNumber(val?: number): number | undefined {
     return undefined;
   }
   return val;
+}
+
+function getString(val?: unknown): string | undefined {
+  if (typeof val === "string") {
+    return val.length > 0 ? val : undefined;
+  }
+  if (typeof val === "number") {
+    return String(val);
+  }
+  return undefined;
 }
 
 function getOrientationStr(n?: number): string | undefined {
@@ -111,11 +138,11 @@ function getCoordinate(val?: number[], ref?: string): number | undefined {
     coord = -coord;
   }
 
-  return roundTo5(coord);
+  return roundTo7(coord);
 }
 
-function roundTo5(n: number): number {
-  return Number(Math.round((n + Number.EPSILON) * 1e5) / 1e5);
+function roundTo7(n: number): number {
+  return Number(Math.round((n + Number.EPSILON) * 1e7) / 1e7);
 }
 
 function getDate(data: exifReader.Exif): string | undefined {
@@ -291,4 +318,223 @@ function getColorSpaceStr(cs?: number): string | undefined {
     default:
       return undefined;
   }
+}
+
+function getLightSourceStr(ls?: number): string | undefined {
+  if (typeof ls !== "number") {
+    return undefined;
+  }
+
+  switch (ls) {
+    case 0:
+      return "Unknown";
+    case 1:
+      return "Daylight";
+    case 2:
+      return "Fluorescent";
+    case 3:
+      return "Tungsten (incandescent)";
+    case 4:
+      return "Flash";
+    case 9:
+      return "Fine weather";
+    case 10:
+      return "Cloudy";
+    case 11:
+      return "Shade";
+    case 12:
+      return "Daylight fluorescent";
+    case 13:
+      return "Day white fluorescent";
+    case 14:
+      return "Cool white fluorescent";
+    case 15:
+      return "White fluorescent";
+    case 16:
+      return "Warm white fluorescent";
+    case 17:
+      return "Standard light A";
+    case 18:
+      return "Standard light B";
+    case 19:
+      return "Standard light C";
+    case 20:
+      return "D55";
+    case 21:
+      return "D65";
+    case 22:
+      return "D75";
+    case 23:
+      return "D50";
+    case 24:
+      return "ISO studio tungsten";
+    case 255:
+      return "Other";
+    default:
+      return undefined;
+  }
+}
+
+function getSceneCaptureTypeStr(sct?: number): string | undefined {
+  if (typeof sct !== "number") {
+    return undefined;
+  }
+
+  switch (sct) {
+    case 0:
+      return "Standard";
+    case 1:
+      return "Landscape";
+    case 2:
+      return "Portrait";
+    case 3:
+      return "Night scene";
+    default:
+      return undefined;
+  }
+}
+
+function getContrastStr(c?: number): string | undefined {
+  if (typeof c !== "number") {
+    return undefined;
+  }
+
+  switch (c) {
+    case 0:
+      return "Normal";
+    case 1:
+      return "Low";
+    case 2:
+      return "High";
+    default:
+      return undefined;
+  }
+}
+
+function getSaturationStr(s?: number): string | undefined {
+  if (typeof s !== "number") {
+    return undefined;
+  }
+
+  switch (s) {
+    case 0:
+      return "Normal";
+    case 1:
+      return "Low";
+    case 2:
+      return "High";
+    default:
+      return undefined;
+  }
+}
+
+function getSharpnessStr(s?: number): string | undefined {
+  if (typeof s !== "number") {
+    return undefined;
+  }
+
+  switch (s) {
+    case 0:
+      return "Normal";
+    case 1:
+      return "Soft";
+    case 2:
+      return "Hard";
+    default:
+      return undefined;
+  }
+}
+
+function getDigitalZoom(ratio?: number): number | undefined {
+  if (typeof ratio !== "number" || !Number.isFinite(ratio)) {
+    return undefined;
+  }
+  // A ratio of 0 or 1 means no digital zoom was used
+  if (ratio <= 1) {
+    return undefined;
+  }
+  return roundTo2(ratio);
+}
+
+function getGpsTimestamp(data: exifReader.Exif): string | undefined {
+  const date = data.GPSInfo?.GPSDateStamp;
+  const time = data.GPSInfo?.GPSTimeStamp;
+
+  if (!date || !time) {
+    return undefined;
+  }
+
+  // GPSDateStamp format: "YYYY:MM:DD"
+  // GPSTimeStamp format: [hours, minutes, seconds] as numbers
+  if (typeof date !== "string" || !Array.isArray(time) || time.length !== 3) {
+    return undefined;
+  }
+
+  const [hours, minutes, seconds] = time;
+  if (
+    typeof hours !== "number" ||
+    typeof minutes !== "number" ||
+    typeof seconds !== "number" ||
+    !Number.isFinite(hours) ||
+    !Number.isFinite(minutes) ||
+    !Number.isFinite(seconds)
+  ) {
+    return undefined;
+  }
+
+  // Convert "YYYY:MM:DD" to "YYYY-MM-DD"
+  const datePart = date.replace(/:/g, "-");
+  const timePart = [
+    String(Math.floor(hours)).padStart(2, "0"),
+    String(Math.floor(minutes)).padStart(2, "0"),
+    String(Math.floor(seconds)).padStart(2, "0"),
+  ].join(":");
+
+  return `${datePart}T${timePart}Z`;
+}
+
+function getUserComment(comment?: string | Buffer): string | undefined {
+  if (!comment) {
+    return undefined;
+  }
+
+  // UserComment can be a string or a Buffer with encoding prefix
+  if (typeof comment === "string") {
+    const trimmed = comment.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  // Handle Buffer: first 8 bytes are encoding identifier
+  if (Buffer.isBuffer(comment) && comment.length > 8) {
+    const encoding = comment.subarray(0, 8).toString("ascii").trim();
+    const content = comment.subarray(8);
+
+    let decoded: string;
+    if (encoding === "UNICODE" || encoding.startsWith("UNICODE")) {
+      decoded = content.toString("utf16le");
+    } else {
+      decoded = content.toString("utf8");
+    }
+
+    // Remove null characters and trim
+    const trimmed = decoded.replace(/\0/g, "").trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  return undefined;
+}
+
+function getRating(rating?: number): number | undefined {
+  if (typeof rating !== "number" || !Number.isInteger(rating)) {
+    return undefined;
+  }
+  // Rating is typically 0-5 (0 = unrated, 1-5 = star rating)
+  if (rating < 0 || rating > 5) {
+    return undefined;
+  }
+  // Don't return 0 (unrated)
+  if (rating === 0) {
+    return undefined;
+  }
+  return rating;
 }

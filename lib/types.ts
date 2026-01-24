@@ -117,15 +117,34 @@ export interface MetadataResult {
   width: number;
   height: number;
   size: number;
+  space: string;
+  channels: number;
+  depth: string;
+  density?: number;
+  resolutionUnit?: string;
+  chromaSubsampling?: string;
+  isProgressive?: boolean;
+  isPalette?: boolean;
+  bitsPerSample?: number;
+  pages?: number;
+  pageHeight?: number;
+  loop?: number;
+  delay?: number[];
+  background?: { r: number; g: number; b: number } | { gray: number };
+  orientation?: number;
+  hasProfile: boolean;
+  hasAlpha: boolean;
   exif?: ExifData;
   stats?: Stats;
   thumbhash?: string;
 }
 
 export interface Stats {
+  isOpaque: boolean;
   entropy: number;
   sharpness: number;
   dominant: { r: number; g: number; b: number };
+  channels: object[];
 }
 
 export interface ExifData {
@@ -135,6 +154,9 @@ export interface ExifData {
   software?: string;
   lens_make?: string;
   lens_model?: string;
+  lens_serial?: string;
+  body_serial?: string;
+  unique_id?: string;
 
   // Capture settings
   datetime?: string;
@@ -150,6 +172,15 @@ export interface ExifData {
   metering_mode?: string;
   white_balance?: string;
   color_space?: string;
+  brightness?: number;
+  max_aperture?: number;
+  subject_distance?: number;
+  light_source?: string;
+  scene_capture_type?: string;
+  contrast?: string;
+  saturation?: string;
+  sharpness?: string;
+  digital_zoom?: number;
 
   // GPS
   latitude?: number;
@@ -157,11 +188,14 @@ export interface ExifData {
   altitude?: number;
   speed?: number;
   direction?: number;
+  gps_timestamp?: string;
 
   // Metadata
   description?: string;
   artist?: string;
   copyright?: string;
+  user_comment?: string;
+  rating?: number;
 }
 
 export class HttpError extends Error {
