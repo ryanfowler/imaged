@@ -38,7 +38,7 @@ Available tags:
 
 - `latest` — Most recent release
 - `0.1.0` — Specific version (see [releases](https://github.com/ryanfowler/imaged/releases))
-- `<commit>` — Specific commit sha
+- `sha-<commit>` — Specific commit sha
 
 ### From Source
 
