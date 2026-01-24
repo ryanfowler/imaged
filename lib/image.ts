@@ -135,11 +135,13 @@ export class ImageEngine {
 
     let stats;
     if (ops.stats) {
-      const { entropy, sharpness, dominant } = await img.stats();
+      const s = await img.stats();
       stats = {
-        entropy: roundTo3(entropy),
-        sharpness: roundTo3(sharpness),
-        dominant,
+        isOpaque: s.isOpaque,
+        entropy: roundTo3(s.entropy),
+        sharpness: roundTo3(s.sharpness),
+        dominant: s.dominant,
+        channels: s.channels,
       };
     }
 
@@ -167,6 +169,23 @@ export class ImageEngine {
       width: meta.autoOrient?.width || meta.width,
       height: meta.autoOrient?.height || meta.height,
       size: ops.data.length,
+      space: meta.space,
+      channels: meta.channels,
+      depth: meta.depth,
+      density: meta.density,
+      resolutionUnit: meta.resolutionUnit,
+      chromaSubsampling: meta.chromaSubsampling,
+      isProgressive: meta.isProgressive,
+      isPalette: meta.isPalette,
+      bitsPerSample: meta.bitsPerSample,
+      pages: meta.pages,
+      pageHeight: meta.pageHeight,
+      loop: meta.loop,
+      delay: meta.delay,
+      background: meta.background,
+      orientation: meta.orientation,
+      hasProfile: meta.hasProfile,
+      hasAlpha: meta.hasAlpha,
       exif,
       stats,
       thumbhash,
