@@ -125,13 +125,13 @@ export class Server {
       ? acceptHeader.join(",")
       : (acceptHeader ?? "");
 
-    const ops = parseImageOps(params, accept, this.dimensionLimit);
+    const { options: ops, ctx } = parseImageOps(params, accept, this.dimensionLimit);
     if (!this.engine.encoders.includes(ops.format)) {
       throw new HttpError(400, `image: encoding type ${ops.format} is not supported`);
     }
 
     const data = await this.client.fetch(url);
-    await this.performTransform(reply, data, ops, start);
+    await this.performTransform(reply, data, ops, ctx, start);
   };
 
   private transformPut = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -143,7 +143,7 @@ export class Server {
       ? acceptHeader.join(",")
       : (acceptHeader ?? "");
 
-    const ops = parseImageOps(params, accept, this.dimensionLimit);
+    const { options: ops, ctx } = parseImageOps(params, accept, this.dimensionLimit);
     if (!this.engine.encoders.includes(ops.format)) {
       throw new HttpError(400, `image: encoding type ${ops.format} is not supported`);
     }
@@ -152,13 +152,14 @@ export class Server {
       throw new HttpError(400, "image data must be provided in the request body");
     }
 
-    await this.performTransform(reply, request.body, ops, start);
+    await this.performTransform(reply, request.body, ops, ctx, start);
   };
 
   private performTransform = async (
     reply: FastifyReply,
     data: Uint8Array,
     ops: Options,
+    ctx: ParseContext,
     start: number,
   ) => {
     const img = await this.engine.perform({
@@ -179,6 +180,7 @@ export class Server {
     });
 
     const elapsed = Math.round(performance.now() - start);
+    setWarningsHeader(reply, ctx);
     reply
       .header("content-type", getMimetype(img.format))
       .header("x-image-width", String(img.width))
@@ -196,9 +198,10 @@ export class Server {
       throw new HttpError(400, "missing 'url' query parameter");
     }
 
+    const metaOps = parseMetadataOps(params);
     const data = await this.client.fetch(url);
 
-    await this.metadata(reply, data, params, start);
+    await this.metadata(reply, data, metaOps, start);
   };
 
   private metadataPut = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -209,23 +212,25 @@ export class Server {
       throw new HttpError(400, "image data must be provided in the request body");
     }
 
-    await this.metadata(reply, request.body, params, start);
+    const metaOps = parseMetadataOps(params);
+    await this.metadata(reply, request.body, metaOps, start);
   };
 
   private metadata = async (
     reply: FastifyReply,
     data: Uint8Array,
-    params: QueryParams,
+    metaOps: MetadataParseResult,
     start: number,
   ) => {
     const res = await this.engine.metadata({
       data,
-      exif: parseBoolean(params, "exif") || false,
-      stats: parseBoolean(params, "stats") || false,
-      thumbhash: parseBoolean(params, "thumbhash") || false,
+      exif: metaOps.exif,
+      stats: metaOps.stats,
+      thumbhash: metaOps.thumbhash,
     });
 
     const elapsed = Math.round(performance.now() - start);
+    setWarningsHeader(reply, metaOps.ctx);
     reply.header("x-response-time-ms", String(elapsed));
     return reply.send(res);
   };
@@ -258,32 +263,169 @@ interface Options {
   preset?: ImagePreset;
 }
 
+// Parse context for strict mode validation
+interface ParseWarning {
+  param: string;
+  value: string;
+  reason: string;
+}
+
+interface ParseContext {
+  strict: boolean;
+  warnings: ParseWarning[];
+  dimensionLimit: number;
+}
+
+interface ParseResult {
+  options: Options;
+  ctx: ParseContext;
+}
+
+interface MetadataParseResult {
+  exif: boolean;
+  stats: boolean;
+  thumbhash: boolean;
+  ctx: ParseContext;
+}
+
+function createParseContext(params: QueryParams, dimensionLimit: number): ParseContext {
+  const ctx = { strict: false, warnings: [], dimensionLimit };
+  const strict = parseBoolean(params, "strict", ctx);
+  ctx.strict = (ctx.warnings.length === 0 && strict) || false;
+  return ctx;
+}
+
+function addWarning(
+  ctx: ParseContext,
+  param: string,
+  value: string,
+  reason: string,
+): void {
+  ctx.warnings.push({ param, value, reason });
+}
+
+// For /transform endpoint (plain text error)
+function throwIfErrorsText(ctx: ParseContext): void {
+  if (ctx.strict && ctx.warnings.length > 0) {
+    const messages = ctx.warnings.map(
+      (e) => `${e.param}: ${e.reason} (got "${e.value}")`,
+    );
+    throw new HttpError(400, `Invalid parameters:\n- ${messages.join("\n- ")}`);
+  }
+}
+
+// For /metadata endpoint (JSON error)
+function throwIfErrorsJson(ctx: ParseContext): void {
+  if (ctx.strict && ctx.warnings.length > 0) {
+    const body = JSON.stringify({
+      error: "Invalid parameters",
+      details: ctx.warnings.map((w) => ({
+        param: w.param,
+        value: w.value,
+        reason: w.reason,
+      })),
+    });
+    throw new HttpError(400, body);
+  }
+}
+
+// Set warnings header on successful response (lenient mode)
+function setWarningsHeader(reply: FastifyReply, ctx: ParseContext): void {
+  if (!ctx.strict && ctx.warnings.length > 0) {
+    const header = ctx.warnings.map((w) => `${w.param}: ${w.reason}`).join("; ");
+    reply.header("X-Imaged-Warnings", header);
+  }
+}
+
+// Known parameter sets for unknown param detection
+const KNOWN_TRANSFORM_PARAMS = new Set([
+  "url",
+  "format",
+  "width",
+  "height",
+  "quality",
+  "effort",
+  "blur",
+  "greyscale",
+  "lossless",
+  "progressive",
+  "fit",
+  "kernel",
+  "position",
+  "preset",
+  "strict",
+]);
+
+const KNOWN_METADATA_PARAMS = new Set(["url", "exif", "stats", "thumbhash", "strict"]);
+
+function validateKnownParams(
+  params: QueryParams,
+  known: Set<string>,
+  ctx: ParseContext,
+): void {
+  for (const key of Object.keys(params)) {
+    if (!known.has(key)) {
+      addWarning(ctx, key, params[key] ?? "", "unknown parameter");
+    }
+  }
+}
+
 function parseImageOps(
   params: QueryParams,
   accept: string,
   dimensionLimit: number,
-): Options {
-  const format = parseFormat(params, accept);
-  return {
+): ParseResult {
+  const ctx = createParseContext(params, dimensionLimit);
+
+  // Validate unknown params
+  validateKnownParams(params, KNOWN_TRANSFORM_PARAMS, ctx);
+
+  const format = parseFormat(params, accept, ctx);
+  const options: Options = {
     format,
-    width: parseDimension(params, "width", dimensionLimit),
-    height: parseDimension(params, "height", dimensionLimit),
-    quality: parseQuality(params),
-    blur: parseBlur(params),
-    greyscale: parseBoolean(params, "greyscale"),
-    lossless: parseBoolean(params, "lossless"),
-    progressive: parseBoolean(params, "progressive"),
-    effort: parseEffort(params, format),
-    fit: parseImageFit(params),
-    kernel: parseImageKernel(params),
-    position: parseImagePosition(params),
-    preset: parseImagePreset(params),
+    width: parseDimension(params, "width", ctx),
+    height: parseDimension(params, "height", ctx),
+    quality: parseQuality(params, ctx),
+    blur: parseBlur(params, ctx),
+    greyscale: parseBoolean(params, "greyscale", ctx),
+    lossless: parseBoolean(params, "lossless", ctx),
+    progressive: parseBoolean(params, "progressive", ctx),
+    effort: parseEffort(params, format, ctx),
+    fit: parseImageFit(params, ctx),
+    kernel: parseImageKernel(params, ctx),
+    position: parseImagePosition(params, ctx),
+    preset: parseImagePreset(params, ctx),
   };
+
+  throwIfErrorsText(ctx);
+  return { options, ctx };
+}
+
+function parseMetadataOps(params: QueryParams): MetadataParseResult {
+  const ctx = createParseContext(params, 0);
+
+  // Validate unknown params
+  validateKnownParams(params, KNOWN_METADATA_PARAMS, ctx);
+
+  const result: MetadataParseResult = {
+    exif: parseBoolean(params, "exif", ctx) ?? false,
+    stats: parseBoolean(params, "stats", ctx) ?? false,
+    thumbhash: parseBoolean(params, "thumbhash", ctx) ?? false,
+    ctx,
+  };
+
+  throwIfErrorsJson(ctx);
+  return result;
 }
 
 const DEFAULT_FORMAT = ImageType.Jpeg;
+const VALID_FORMATS = Object.values(ImageType).join(", ");
 
-function parseFormat(params: QueryParams, accept: string): ImageType {
+function parseFormat(
+  params: QueryParams,
+  accept: string,
+  ctx: ParseContext,
+): ImageType {
   const v = params["format"];
   if (v == null || v === "") {
     return DEFAULT_FORMAT;
@@ -307,19 +449,28 @@ function parseFormat(params: QueryParams, accept: string): ImageType {
     }
     const t = getImageType(first);
     if (t == null) {
+      addWarning(ctx, "format", first, `unknown format, valid: ${VALID_FORMATS}`);
       return DEFAULT_FORMAT;
     }
     return t;
   }
+
+  // Track invalid formats for warnings
+  const invalidFormats: string[] = [];
 
   // Try to pick first option that matches the Accept header.
   const acceptLower = accept.toLowerCase();
   for (const opt of opts) {
     const t = getImageType(opt);
     if (t == null) {
+      invalidFormats.push(opt);
       continue;
     }
     if (acceptLower.includes(getMimetype(t))) {
+      // Add warnings for any invalid formats we encountered
+      for (const invalid of invalidFormats) {
+        addWarning(ctx, "format", invalid, `unknown format, valid: ${VALID_FORMATS}`);
+      }
       return t;
     }
   }
@@ -331,20 +482,41 @@ function parseFormat(params: QueryParams, accept: string): ImageType {
   }
   const t = getImageType(opt);
   if (t == null) {
+    addWarning(ctx, "format", opt, `unknown format, valid: ${VALID_FORMATS}`);
     return DEFAULT_FORMAT;
+  }
+
+  // Add warnings for any invalid formats we encountered
+  for (const invalid of invalidFormats) {
+    addWarning(ctx, "format", invalid, `unknown format, valid: ${VALID_FORMATS}`);
   }
   return t;
 }
 
-function parseBoolean(params: QueryParams, key: string): boolean | undefined {
+function parseBoolean(
+  params: QueryParams,
+  key: string,
+  ctx: ParseContext,
+): boolean | undefined {
   const v = params[key];
   if (v == null) {
     return undefined;
   }
-  return v !== "false" && v !== "0";
+  if (v === "false" || v === "0") {
+    return false;
+  }
+  if (v === "" || v === "true" || v === "1") {
+    return true;
+  }
+  // Invalid value - warn and treat as true
+  addWarning(ctx, key, v, "must be true, false, 1, or 0");
+  return true;
 }
 
-function parseBlur(params: QueryParams): boolean | number | undefined {
+function parseBlur(
+  params: QueryParams,
+  ctx: ParseContext,
+): boolean | number | undefined {
   const v = params["blur"];
   if (v == null) {
     return undefined;
@@ -357,34 +529,53 @@ function parseBlur(params: QueryParams): boolean | number | undefined {
   }
   const n = Number(v);
   if (!Number.isFinite(n)) {
-    return true;
+    addWarning(ctx, "blur", v, "must be a boolean or number between 0.3 and 1000");
+    return undefined;
   }
   if (n < 0.3) {
+    addWarning(ctx, "blur", v, "must be at least 0.3");
     return 0.3;
   }
   if (n > 1000) {
+    addWarning(ctx, "blur", v, "must be at most 1000");
     return 1000;
   }
   return n;
 }
 
-function parseQuality(params: QueryParams): number | undefined {
-  const value = parseU32(params, "quality");
+function parseQuality(params: QueryParams, ctx: ParseContext): number | undefined {
+  const v = params["quality"];
+  if (v == null || v === "") {
+    return undefined;
+  }
+  const value = parseU32Value(v);
   if (value == null) {
+    addWarning(ctx, "quality", v, "must be a positive integer");
     return undefined;
   }
   if (value < 1) {
+    addWarning(ctx, "quality", v, "must be at least 1");
     return 1;
   }
   if (value > 100) {
+    addWarning(ctx, "quality", v, "must be at most 100");
     return 100;
   }
   return value;
 }
 
-function parseEffort(params: QueryParams, format: ImageType): number | undefined {
-  const value = parseU32(params, "effort");
+function parseEffort(
+  params: QueryParams,
+  format: ImageType,
+  ctx: ParseContext,
+): number | undefined {
+  const v = params["effort"];
+  if (v == null || v === "") {
+    return undefined;
+  }
+  const value = parseU32Value(v);
   if (value == null) {
+    addWarning(ctx, "effort", v, "must be a positive integer");
     return undefined;
   }
 
@@ -413,9 +604,11 @@ function parseEffort(params: QueryParams, format: ImageType): number | undefined
       return undefined;
   }
   if (value < low) {
+    addWarning(ctx, "effort", v, `must be at least ${low} for ${format}`);
     return low;
   }
   if (value > high) {
+    addWarning(ctx, "effort", v, `must be at most ${high} for ${format}`);
     return high;
   }
   return value;
@@ -424,21 +617,31 @@ function parseEffort(params: QueryParams, format: ImageType): number | undefined
 function parseDimension(
   params: QueryParams,
   key: string,
-  limit: number,
+  ctx: ParseContext,
 ): number | undefined {
-  const value = parseU32(params, key);
-  if (value != null && value > limit) {
-    return undefined;
-  }
-  return value;
-}
-
-function parseU32(params: QueryParams, key: string): number | undefined {
   const v = params[key];
   if (v == null || v === "") {
     return undefined;
   }
 
+  const value = parseU32Value(v);
+  if (value == null) {
+    addWarning(ctx, key, v, "must be a positive integer");
+    return undefined;
+  }
+  if (value < 1) {
+    addWarning(ctx, key, v, "must be at least 1");
+    return 1;
+  }
+  if (value > ctx.dimensionLimit) {
+    addWarning(ctx, key, v, `must be at most ${ctx.dimensionLimit}`);
+    return ctx.dimensionLimit;
+  }
+  return value;
+}
+
+// Helper function to parse a u32 value from a string
+function parseU32Value(v: string): number | undefined {
   // strict-ish u32 parsing
   const n = Number(v);
   if (!Number.isFinite(n)) {
@@ -450,7 +653,6 @@ function parseU32(params: QueryParams, key: string): number | undefined {
   if (n < 0 || n > 0xffff_ffff) {
     return undefined;
   }
-
   return n;
 }
 
@@ -513,50 +715,78 @@ function getImageType(raw: string): ImageType | null {
 }
 
 const IMAGE_FIT_SET = new Set<string>(Object.values(ImageFit));
+const VALID_FITS = Object.values(ImageFit).join(", ");
 
-function parseImageFit(params: QueryParams): ImageFit | undefined {
+function parseImageFit(params: QueryParams, ctx: ParseContext): ImageFit | undefined {
   const fit = params["fit"];
   if (fit == null) {
     return undefined;
   }
-
-  return IMAGE_FIT_SET.has(fit) ? (fit as ImageFit) : undefined;
+  if (!IMAGE_FIT_SET.has(fit)) {
+    addWarning(ctx, "fit", fit, `unknown value, valid: ${VALID_FITS}`);
+    return undefined;
+  }
+  return fit as ImageFit;
 }
 
 const IMAGE_KERNEL_SET = new Set<string>(Object.values(ImageKernel));
+const VALID_KERNELS = Object.values(ImageKernel).join(", ");
 
-function parseImageKernel(params: QueryParams): ImageKernel | undefined {
+function parseImageKernel(
+  params: QueryParams,
+  ctx: ParseContext,
+): ImageKernel | undefined {
   const kernel = params["kernel"];
   if (kernel == null) {
     return undefined;
   }
-
-  return IMAGE_KERNEL_SET.has(kernel) ? (kernel as ImageKernel) : undefined;
+  if (!IMAGE_KERNEL_SET.has(kernel)) {
+    addWarning(ctx, "kernel", kernel, `unknown value, valid: ${VALID_KERNELS}`);
+    return undefined;
+  }
+  return kernel as ImageKernel;
 }
 
 const IMAGE_POSITION_SET = new Set<string>(Object.values(ImagePosition));
+const VALID_POSITIONS = Object.values(ImagePosition).join(", ");
 
-function parseImagePosition(params: QueryParams): ImagePosition | undefined {
+function parseImagePosition(
+  params: QueryParams,
+  ctx: ParseContext,
+): ImagePosition | undefined {
   const position = params["position"];
   if (position == null) {
     return undefined;
   }
-
-  return IMAGE_POSITION_SET.has(position) ? (position as ImagePosition) : undefined;
+  if (!IMAGE_POSITION_SET.has(position)) {
+    addWarning(ctx, "position", position, `unknown value, valid: ${VALID_POSITIONS}`);
+    return undefined;
+  }
+  return position as ImagePosition;
 }
 
 const IMAGE_PRESET_SET = new Set<string>(IMAGE_PRESETS);
+const VALID_PRESETS = IMAGE_PRESETS.join(", ");
 
-function parseImagePreset(params: QueryParams): ImagePreset | undefined {
+function parseImagePreset(
+  params: QueryParams,
+  ctx: ParseContext,
+): ImagePreset | undefined {
   const preset = params["preset"];
   if (preset == null) {
     return undefined;
   }
-
-  return IMAGE_PRESET_SET.has(preset) ? (preset as ImagePreset) : undefined;
+  if (!IMAGE_PRESET_SET.has(preset)) {
+    addWarning(ctx, "preset", preset, `unknown value, valid: ${VALID_PRESETS}`);
+    return undefined;
+  }
+  return preset as ImagePreset;
 }
 
 type QueryParams = Record<string, string | undefined>;
+
+// Export for testing
+export { createParseContext, parseImageOps, parseMetadataOps };
 
 function notFoundHandler(_req: FastifyRequest, reply: FastifyReply) {
   reply.code(404);

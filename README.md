@@ -151,6 +151,7 @@ GET /transform  (requires --enable-fetch)
 | `kernel`      | string         | Resize kernel: `nearest`, `linear`, `cubic`, `mitchell`, `lanczos2`, `lanczos3` |
 | `position`    | string         | Crop position when using `cover` fit                                            |
 | `preset`      | string         | Encoding preset: `default`, `quality`, `size`                                   |
+| `strict`      | boolean        | Enable strict validation mode (returns 400 on invalid parameters)               |
 
 #### Examples
 
@@ -203,12 +204,13 @@ curl "http://localhost:8000/transform?url=https://example.com/image.jpg&width=50
 
 #### Response Headers
 
-| Header               | Description                     |
-| -------------------- | ------------------------------- |
-| `Content-Type`       | MIME type of the output image   |
-| `X-Image-Width`      | Width of the output image       |
-| `X-Image-Height`     | Height of the output image      |
-| `X-Response-Time-Ms` | Processing time in milliseconds |
+| Header               | Description                                          |
+| -------------------- | ---------------------------------------------------- |
+| `Content-Type`       | MIME type of the output image                        |
+| `X-Image-Width`      | Width of the output image                            |
+| `X-Image-Height`     | Height of the output image                           |
+| `X-Response-Time-Ms` | Processing time in milliseconds                      |
+| `X-Imaged-Warnings`  | Parameter validation warnings (only in lenient mode) |
 
 ---
 
@@ -223,12 +225,13 @@ GET /metadata  (requires --enable-fetch)
 
 #### Query Parameters
 
-| Parameter   | Type    | Description                 |
-| ----------- | ------- | --------------------------- |
-| `url`       | string  | Source image URL (GET only) |
-| `exif`      | boolean | Include EXIF metadata       |
-| `stats`     | boolean | Include image statistics    |
-| `thumbhash` | boolean | Generate thumbhash          |
+| Parameter   | Type    | Description                                            |
+| ----------- | ------- | ------------------------------------------------------ |
+| `url`       | string  | Source image URL (GET only)                            |
+| `exif`      | boolean | Include EXIF metadata                                  |
+| `stats`     | boolean | Include image statistics                               |
+| `thumbhash` | boolean | Generate thumbhash                                     |
+| `strict`    | boolean | Enable strict validation mode (returns 400 on invalid) |
 
 #### Examples
 
@@ -306,6 +309,58 @@ curl -X PUT \
   "thumbhash": "3OcRJYB4d3h/iIeHeEh3eIhw+j3A"
 }
 ```
+
+## Parameter Validation
+
+imaged validates all query parameters and provides two validation modes:
+
+### Lenient Mode (Default)
+
+Invalid parameters are handled gracefully without failing the request:
+
+- **Out-of-range values are clamped** — `quality=200` becomes `100`, `width=99999` becomes the dimension limit
+- **Invalid values are ignored** — `blur=abc` applies no blur, `format=bmp` falls back to JPEG
+- **Unknown parameters are ignored** — Extra parameters don't cause errors
+- **Warnings are returned** — The `X-Imaged-Warnings` header contains details about any adjustments
+
+```bash
+# Request with out-of-range quality
+curl -v -X PUT "http://localhost:8000/transform?quality=200" \
+  --data-binary @input.jpg -o output.jpg
+
+# Response includes warning header:
+# X-Imaged-Warnings: quality: must be at most 100
+```
+
+### Strict Mode
+
+Enable strict validation with `strict=true` to return 400 Bad Request for any invalid parameter:
+
+```bash
+# Strict mode rejects invalid parameters
+curl -X PUT "http://localhost:8000/transform?quality=abc&strict=true" \
+  --data-binary @input.jpg
+
+# Returns 400 Bad Request:
+# Invalid parameters:
+# - quality: must be a positive integer (got "abc")
+```
+
+**Error formats:**
+
+- `/transform` endpoint returns plain text errors
+- `/metadata` endpoint returns JSON errors:
+
+```json
+{
+  "error": "Invalid parameters",
+  "details": [
+    { "param": "exif", "value": "maybe", "reason": "must be true, false, 1, or 0" }
+  ]
+}
+```
+
+Use strict mode during development to catch parameter errors early, or in production when you want explicit failures instead of silent corrections.
 
 ## TLS
 
