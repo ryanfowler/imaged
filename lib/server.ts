@@ -263,8 +263,9 @@ function parseImageOps(
   accept: string,
   dimensionLimit: number,
 ): Options {
+  const format = parseFormat(params, accept);
   return {
-    format: parseFormat(params, accept),
+    format,
     width: parseDimension(params, "width", dimensionLimit),
     height: parseDimension(params, "height", dimensionLimit),
     quality: parseQuality(params),
@@ -272,7 +273,7 @@ function parseImageOps(
     greyscale: parseBoolean(params, "greyscale"),
     lossless: parseBoolean(params, "lossless"),
     progressive: parseBoolean(params, "progressive"),
-    effort: parseEffort(params),
+    effort: parseEffort(params, format),
     fit: parseImageFit(params),
     kernel: parseImageKernel(params),
     position: parseImagePosition(params),
@@ -345,16 +346,53 @@ function parseBoolean(params: QueryParams, key: string): boolean | undefined {
 
 function parseQuality(params: QueryParams): number | undefined {
   const value = parseU32(params, "quality");
-  if (value && (value < 1 || value > 100)) {
+  if (value == null) {
     return undefined;
+  }
+  if (value < 1) {
+    return 1;
+  }
+  if (value > 100) {
+    return 100;
   }
   return value;
 }
 
-function parseEffort(params: QueryParams): number | undefined {
+function parseEffort(params: QueryParams, format: ImageType): number | undefined {
   const value = parseU32(params, "effort");
-  if (value != null && (value < 0 || value > 10)) {
+  if (value == null) {
     return undefined;
+  }
+
+  let low;
+  let high;
+  switch (format) {
+    case ImageType.Avif:
+    case ImageType.Heic:
+      low = 0;
+      high = 9;
+      break;
+    case ImageType.Gif:
+    case ImageType.Png:
+      low = 1;
+      high = 10;
+      break;
+    case ImageType.JpegXL:
+      low = 1;
+      high = 9;
+      break;
+    case ImageType.Webp:
+      low = 0;
+      high = 6;
+      break;
+    default:
+      return undefined;
+  }
+  if (value < low) {
+    return low;
+  }
+  if (value > high) {
+    return high;
   }
   return value;
 }
