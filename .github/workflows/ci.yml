@@ -55,6 +55,9 @@ jobs:
       - name: Type check
         run: bun run --bun tsc --noEmit
 
+      - name: Run tests
+        run: bun test
+
       - name: Verify server starts
         run: |
           timeout 5 bun run index.ts &
