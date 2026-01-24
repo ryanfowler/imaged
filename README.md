@@ -135,22 +135,22 @@ GET /transform  (requires --enable-fetch)
 
 #### Query Parameters
 
-| Parameter     | Type    | Description                                                                     |
-| ------------- | ------- | ------------------------------------------------------------------------------- |
-| `url`         | string  | Source image URL (GET only)                                                     |
-| `format`      | string  | Output format: `avif`, `gif`, `heic`, `jpeg`, `jxl`, `png`, `tiff`, `webp`      |
-| `width`       | number  | Target width in pixels                                                          |
-| `height`      | number  | Target height in pixels                                                         |
-| `quality`     | number  | Output quality (1-100)                                                          |
-| `effort`      | number  | CPU effort for encoding (AVIF/HEIC: 0-9, GIF/PNG: 1-10, JXL: 1-9, WebP: 0-6)    |
-| `blur`        | boolean | Apply blur effect                                                               |
-| `greyscale`   | boolean | Convert to greyscale                                                            |
-| `lossless`    | boolean | Use lossless compression (where supported)                                      |
-| `progressive` | boolean | Use progressive encoding (JPEG/PNG)                                             |
-| `fit`         | string  | Resize fit mode: `cover`, `contain`, `fill`, `inside`, `outside`                |
-| `kernel`      | string  | Resize kernel: `nearest`, `linear`, `cubic`, `mitchell`, `lanczos2`, `lanczos3` |
-| `position`    | string  | Crop position when using `cover` fit                                            |
-| `preset`      | string  | Encoding preset: `default`, `quality`, `size`                                   |
+| Parameter     | Type           | Description                                                                     |
+| ------------- | -------------- | ------------------------------------------------------------------------------- |
+| `url`         | string         | Source image URL (GET only)                                                     |
+| `format`      | string         | Output format: `avif`, `gif`, `heic`, `jpeg`, `jxl`, `png`, `tiff`, `webp`      |
+| `width`       | number         | Target width in pixels                                                          |
+| `height`      | number         | Target height in pixels                                                         |
+| `quality`     | number         | Output quality (1-100)                                                          |
+| `effort`      | number         | CPU effort for encoding (AVIF/HEIC: 0-9, GIF/PNG: 1-10, JXL: 1-9, WebP: 0-6)    |
+| `blur`        | boolean/number | Apply blur effect (`true` for fast 3x3 box blur, or sigma value 0.3-1000)       |
+| `greyscale`   | boolean        | Convert to greyscale                                                            |
+| `lossless`    | boolean        | Use lossless compression (where supported)                                      |
+| `progressive` | boolean        | Use progressive encoding (JPEG/PNG)                                             |
+| `fit`         | string         | Resize fit mode: `cover`, `contain`, `fill`, `inside`, `outside`                |
+| `kernel`      | string         | Resize kernel: `nearest`, `linear`, `cubic`, `mitchell`, `lanczos2`, `lanczos3` |
+| `position`    | string         | Crop position when using `cover` fit                                            |
+| `preset`      | string         | Encoding preset: `default`, `quality`, `size`                                   |
 
 #### Examples
 

@@ -247,7 +247,7 @@ interface Options {
   width?: number;
   height?: number;
   quality?: number;
-  blur?: boolean;
+  blur?: boolean | number;
   greyscale?: boolean;
   lossless?: boolean;
   progressive?: boolean;
@@ -269,7 +269,7 @@ function parseImageOps(
     width: parseDimension(params, "width", dimensionLimit),
     height: parseDimension(params, "height", dimensionLimit),
     quality: parseQuality(params),
-    blur: parseBoolean(params, "blur"),
+    blur: parseBlur(params),
     greyscale: parseBoolean(params, "greyscale"),
     lossless: parseBoolean(params, "lossless"),
     progressive: parseBoolean(params, "progressive"),
@@ -342,6 +342,30 @@ function parseBoolean(params: QueryParams, key: string): boolean | undefined {
     return undefined;
   }
   return v !== "false" && v !== "0";
+}
+
+function parseBlur(params: QueryParams): boolean | number | undefined {
+  const v = params["blur"];
+  if (v == null) {
+    return undefined;
+  }
+  if (v === "false" || v === "0") {
+    return undefined;
+  }
+  if (v === "" || v === "true" || v === "1") {
+    return true;
+  }
+  const n = Number(v);
+  if (!Number.isFinite(n)) {
+    return true;
+  }
+  if (n < 0.3) {
+    return 0.3;
+  }
+  if (n > 1000) {
+    return 1000;
+  }
+  return n;
 }
 
 function parseQuality(params: QueryParams): number | undefined {

@@ -85,7 +85,7 @@ export class ImageEngine {
     }
 
     if (ops.blur) {
-      img = img.blur(10);
+      img = typeof ops.blur === "number" ? img.blur(ops.blur) : img.blur();
     }
 
     img = applyFormat(img, ops);

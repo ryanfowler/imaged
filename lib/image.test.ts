@@ -261,7 +261,7 @@ describe("ImageEngine", () => {
       expect(result.height).toBe(30);
     });
 
-    test("applies blur", async () => {
+    test("applies blur with boolean", async () => {
       const result = await engine.perform({
         data: jpegBuffer,
         format: ImageType.Jpeg,
@@ -272,6 +272,36 @@ describe("ImageEngine", () => {
       expect(result.height).toBe(100);
       // Blurred image should still be valid JPEG
       expect(detectImageFormat(result.data)).toBe(ImageType.Jpeg);
+    });
+
+    test("applies blur with sigma value", async () => {
+      const result = await engine.perform({
+        data: jpegBuffer,
+        format: ImageType.Jpeg,
+        blur: 5.5,
+      });
+
+      expect(result.width).toBe(100);
+      expect(result.height).toBe(100);
+      expect(detectImageFormat(result.data)).toBe(ImageType.Jpeg);
+    });
+
+    test("applies different blur intensities", async () => {
+      const lightBlur = await engine.perform({
+        data: jpegBuffer,
+        format: ImageType.Jpeg,
+        blur: 0.3,
+      });
+
+      const heavyBlur = await engine.perform({
+        data: jpegBuffer,
+        format: ImageType.Jpeg,
+        blur: 50,
+      });
+
+      // Both should be valid images
+      expect(detectImageFormat(lightBlur.data)).toBe(ImageType.Jpeg);
+      expect(detectImageFormat(heavyBlur.data)).toBe(ImageType.Jpeg);
     });
 
     test("applies greyscale", async () => {
