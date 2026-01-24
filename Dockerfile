@@ -52,6 +52,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends libmimalloc3 \
 
 # Runtime
 FROM gcr.io/distroless/cc-debian13
+
+LABEL org.opencontainers.image.source="https://github.com/ryanfowler/imaged"
+LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.title="imaged"
+LABEL org.opencontainers.image.description="A high-performance HTTP server for on-the-fly image processing"
+LABEL org.opencontainers.image.url="https://github.com/ryanfowler/imaged"
+LABEL org.opencontainers.image.documentation="https://github.com/ryanfowler/imaged#readme"
+LABEL org.opencontainers.image.vendor="Ryan Fowler"
+
 WORKDIR /app
 
 COPY --link --from=build /usr/local/bin/bun /usr/local/bin/bun

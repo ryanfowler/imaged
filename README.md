@@ -11,12 +11,60 @@ Built with [Bun](https://bun.sh) and powered by [Sharp](https://sharp.pixelplumb
 - **Wide format support** — AVIF, GIF, HEIC, JPEG, JPEG XL, PNG, SVG, TIFF, and WebP
 - **Production ready** — Configurable concurrency, request limits, TLS, and structured logging
 
-## Quick Start
+## Installation
+
+### Docker (Recommended)
+
+Pull the latest image from GitHub Container Registry:
 
 ```bash
+docker pull ghcr.io/ryanfowler/imaged:latest
+```
+
+Run the server:
+
+```bash
+docker run -p 8000:8000 ghcr.io/ryanfowler/imaged:latest
+```
+
+With custom options:
+
+```bash
+docker run -p 8000:8000 ghcr.io/ryanfowler/imaged:latest \
+  --log-format=json --enable-fetch
+```
+
+Available tags:
+
+- `latest` — Most recent release
+- `0.1.0` — Specific version (see [releases](https://github.com/ryanfowler/imaged/releases))
+- `<commit>` — Specific commit sha
+
+### From Source
+
+Requires [Bun](https://bun.sh) installed:
+
+```bash
+git clone https://github.com/ryanfowler/imaged.git
+cd imaged
 bun install
 bun run index.ts
 ```
+
+### Build Docker Image Locally
+
+```bash
+make build    # Build the image
+make run      # Start the server
+```
+
+To pass arguments to the container:
+
+```bash
+make run ARGS="--port=3000"
+```
+
+## Quick Start
 
 The server starts at `http://localhost:8000`. Try it out:
 
@@ -302,19 +350,6 @@ For libvips, you may be interested in the following environment variables:
 
 - `VIPS_DISC_THRESHOLD`
 - `VIPS_CONCURRENCY` (default of `1` used in imaged)
-
-## Docker
-
-```bash
-make build    # Build the image
-make run      # Start the server
-```
-
-To pass arguments to the container:
-
-```bash
-make run ARGS="--port=3000"
-```
 
 ## Using System libvips
 
