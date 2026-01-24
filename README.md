@@ -80,21 +80,22 @@ curl -X PUT "http://localhost:8000/metadata?exif=true" \
 
 ## CLI Options
 
-| Flag                          | Description                                 | Default     |
-| ----------------------------- | ------------------------------------------- | ----------- |
-| `-p, --port <number>`         | HTTP port to listen on                      | 8000        |
-| `-H, --host <address>`        | HTTP host to bind to                        | -           |
-| `-u, --unix <path>`           | Unix socket path (overrides port/host)      | -           |
-| `-c, --concurrency <number>`  | Max concurrent image operations             | CPU cores   |
-| `-b, --body-limit <bytes>`    | Max request body size in bytes              | 16,777,216  |
-| `-x, --pixel-limit <pixels>`  | Max input image pixels                      | 100,000,000 |
-| `-d, --dimension-limit <px>`  | Max output width/height in pixels           | 16,384      |
-| `-f, --enable-fetch`          | Enable GET endpoints that fetch remote URLs | false       |
-| `-a, --allowed-hosts <regex>` | Regex pattern for allowed fetch hosts       | -           |
-| `-l, --log-format <format>`   | Log format: `json` or `text`                | text        |
-| `-L, --log-level <level>`     | Log level: `debug`, `info`, `warn`, `error` | info        |
-| `--tls-cert <path>`           | Path to TLS certificate file                | -           |
-| `--tls-key <path>`            | Path to TLS private key file                | -           |
+| Flag                            | Description                                 | Default     |
+| ------------------------------- | ------------------------------------------- | ----------- |
+| `-p, --port <number>`           | HTTP port to listen on                      | 8000        |
+| `-H, --host <address>`          | HTTP host to bind to                        | -           |
+| `-u, --unix <path>`             | Unix socket path (overrides port/host)      | -           |
+| `-c, --concurrency <number>`    | Max concurrent image operations             | CPU cores   |
+| `-b, --body-limit <bytes>`      | Max request body size in bytes              | 16,777,216  |
+| `-x, --pixel-limit <pixels>`    | Max input image pixels                      | 100,000,000 |
+| `-d, --dimension-limit <px>`    | Max output width/height in pixels           | 16,384      |
+| `-f, --enable-fetch`            | Enable GET endpoints that fetch remote URLs | false       |
+| `-a, --allowed-hosts <regex>`   | Regex pattern for allowed fetch hosts       | -           |
+| `    --disable-ssrf-protection` | Disable SSRF protection for fetch requests  | false       |
+| `-l, --log-format <format>`     | Log format: `json` or `text`                | text        |
+| `-L, --log-level <level>`       | Log level: `debug`, `info`, `warn`, `error` | info        |
+| `    --tls-cert <path>`         | Path to TLS certificate file                | -           |
+| `    --tls-key <path>`          | Path to TLS private key file                | -           |
 
 ## API Reference
 
@@ -313,6 +314,39 @@ Enable HTTPS by providing a certificate and private key:
 ```bash
 bun run index.ts --tls-cert cert.pem --tls-key key.pem
 ```
+
+## Security
+
+### SSRF Protection
+
+When using `--enable-fetch` to allow fetching remote images, imaged includes Server-Side Request Forgery (SSRF) protection that is **enabled by default**. This prevents attackers from using imaged to make requests to internal services.
+
+**Protected IP ranges:**
+
+- **IPv4**: Loopback (127.0.0.0/8), private networks (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16), link-local (169.254.0.0/16), multicast (224.0.0.0/4), and reserved ranges
+- **IPv6**: Loopback (::1), unspecified (::), link-local (fe80::/10), unique local (fc00::/7), multicast (ff00::/8), and IPv4-mapped addresses
+
+**Redirect validation:** SSRF protection validates each redirect hop, preventing attacks where an allowed host redirects to an internal IP.
+
+**To disable** (not recommended for production):
+
+```bash
+bun run index.ts --enable-fetch --disable-ssrf-protection
+```
+
+### Host Allowlist
+
+Use `--allowed-hosts` with a regex pattern to restrict which hosts can be fetched:
+
+```bash
+# Only allow images from example.com
+bun run index.ts --enable-fetch --allowed-hosts '^example\.com$'
+
+# Allow multiple domains
+bun run index.ts --enable-fetch --allowed-hosts '^(images\.example\.com|cdn\.example\.com)$'
+```
+
+The allowlist is validated on both initial requests and redirects.
 
 ## Performance
 
