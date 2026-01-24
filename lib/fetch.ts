@@ -1,21 +1,30 @@
+import { validateUrlForSSRF } from "./ssrf.ts";
 import { HttpError } from "./types.ts";
 
 import type { ReadableStreamReadResult } from "node:stream/web";
+
+const MAX_REDIRECTS = 10;
 
 export class Client {
   private timeoutMs: number;
   private bodyLimitBytes: number;
   private allowedHosts?: RegExp;
+  private ssrfProtection: boolean;
 
-  constructor(opts: { timeoutMs: number; bodyLimit: number; allowedHosts?: RegExp }) {
+  constructor(opts: {
+    timeoutMs: number;
+    bodyLimit: number;
+    allowedHosts?: RegExp;
+    ssrfProtection?: boolean;
+  }) {
     this.timeoutMs = opts.timeoutMs;
     this.bodyLimitBytes = opts.bodyLimit;
     this.allowedHosts = opts.allowedHosts;
+    this.ssrfProtection = opts.ssrfProtection ?? true;
   }
 
   async fetch(url: string): Promise<Uint8Array> {
-    this.validateHost(url);
-    const res = await this.makeRequest(url);
+    const res = await this.fetchWithRedirects(url);
     const reader = res.body!.getReader();
 
     // Use Content-Length for early rejection and optimal pre-allocation.
@@ -43,25 +52,65 @@ export class Client {
     return this.readChunked(reader);
   }
 
-  // Performs the HTTP request with timeout and validates the response.
+  // Performs HTTP request with redirect validation.
+  // Handles redirects manually to validate each destination for SSRF.
+  private async fetchWithRedirects(url: string): Promise<Response> {
+    let currentUrl = url;
+    let redirectCount = 0;
+
+    while (true) {
+      // Validate host before each request (initial + redirects)
+      await this.validateHost(currentUrl);
+
+      const res = await this.makeRequest(currentUrl);
+
+      // Check for redirect responses
+      if (res.status >= 300 && res.status < 400) {
+        if (redirectCount >= MAX_REDIRECTS) {
+          throw new HttpError(400, "fetch: too many redirects");
+        }
+
+        const location = res.headers.get("location");
+        if (!location) {
+          throw new HttpError(502, "fetch: redirect response missing location header");
+        }
+
+        // Resolve relative URLs against current URL
+        try {
+          currentUrl = new URL(location, currentUrl).toString();
+        } catch {
+          throw new HttpError(502, "fetch: invalid redirect location");
+        }
+
+        redirectCount++;
+        continue;
+      }
+
+      // Validate final response
+      if (res.status === 404) {
+        throw new HttpError(404, "fetch: not found");
+      }
+      if (res.status < 200 || res.status >= 400) {
+        throw new HttpError(502, `fetch: received status ${res.status}`);
+      }
+      if (!res.body) {
+        throw new HttpError(400, "fetch: no body in response");
+      }
+
+      return res;
+    }
+  }
+
+  // Performs a single HTTP request with timeout and manual redirect handling.
   private async makeRequest(url: string): Promise<Response> {
     let res: Response;
     try {
       res = await fetch(url, {
         signal: AbortSignal.timeout(this.timeoutMs),
+        redirect: "manual",
       });
     } catch {
       throw new HttpError(400, "fetch: unable to make request");
-    }
-
-    if (res.status === 404) {
-      throw new HttpError(404, "fetch: not found");
-    }
-    if (res.status < 200 || res.status >= 400) {
-      throw new HttpError(502, `fetch: received status ${res.status}`);
-    }
-    if (!res.body) {
-      throw new HttpError(400, "fetch: no body in response");
     }
 
     return res;
@@ -141,7 +190,7 @@ export class Client {
     );
   }
 
-  private validateHost(url: string): void {
+  private async validateHost(url: string): Promise<void> {
     let parsed: URL;
     try {
       parsed = new URL(url);
@@ -154,12 +203,14 @@ export class Client {
       throw new HttpError(400, "fetch: only http and https URLs are supported");
     }
 
-    if (!this.allowedHosts) {
-      return;
+    // Check allowed hosts regex
+    if (this.allowedHosts && !this.allowedHosts.test(parsed.host)) {
+      throw new HttpError(403, "fetch: host is not allowed");
     }
 
-    if (!this.allowedHosts.test(parsed.host)) {
-      throw new HttpError(403, "fetch: host is not allowed");
+    // SSRF protection: validate IP addresses
+    if (this.ssrfProtection) {
+      await validateUrlForSSRF(parsed);
     }
   }
 }

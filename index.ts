@@ -11,6 +11,7 @@ const client = new Client({
   timeoutMs: 10_000,
   bodyLimit: opts.bodyLimit,
   allowedHosts: opts.allowedHosts,
+  ssrfProtection: opts.ssrfProtection,
 });
 const engine = new ImageEngine({
   concurrency: opts.concurrency,

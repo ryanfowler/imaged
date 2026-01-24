@@ -15,6 +15,7 @@ export interface CLIOptions {
   dimensionLimit: number;
   enableFetch: boolean;
   allowedHosts?: RegExp;
+  ssrfProtection: boolean;
   logFormat: LogFormat;
   logLevel: LogLevel;
   tlsCert?: string;
@@ -31,6 +32,7 @@ interface RawOptions {
   dimensionLimit: string;
   enableFetch: boolean;
   allowedHosts?: string;
+  disableSsrfProtection: boolean;
   logFormat: string;
   logLevel: string;
   tlsCert?: string;
@@ -43,6 +45,15 @@ export function parseArgs(): CLIOptions {
   const program = new Command()
     .name("imaged")
     .description("Image processing server")
+    .configureHelp({
+      optionTerm: (option) => {
+        // Add padding for flags without short form to align with "-X, " prefix
+        if (option.flags.startsWith("--")) {
+          return "    " + option.flags;
+        }
+        return option.flags;
+      },
+    })
     .option("-a, --allowed-hosts <regex>", "Regex pattern for allowed fetch hosts")
     .option(
       "-b, --body-limit <bytes>",
@@ -56,6 +67,11 @@ export function parseArgs(): CLIOptions {
     )
     .option("-f, --enable-fetch", "Enable GET endpoints that fetch remote URLs", false)
     .helpOption("-h --help", "Display help")
+    .option(
+      "--disable-ssrf-protection",
+      "Disable SSRF protection (allow requests to private IPs)",
+      false,
+    )
     .option("-H, --host <address>", "HTTP host to bind to")
     .option("-l, --log-format <format>", "Log format: json or text", "text")
     .option("-L, --log-level <level>", "Log level: debug, info, warn, or error", "info")
@@ -161,6 +177,7 @@ export function parseArgs(): CLIOptions {
     dimensionLimit,
     enableFetch: opts.enableFetch,
     allowedHosts,
+    ssrfProtection: !opts.disableSsrfProtection,
     logFormat,
     logLevel,
     tlsCert,
