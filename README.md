@@ -93,6 +93,7 @@ GET /transform  (requires --enable-fetch)
 | `width`       | number  | Target width in pixels                                                          |
 | `height`      | number  | Target height in pixels                                                         |
 | `quality`     | number  | Output quality (1-100)                                                          |
+| `effort`      | number  | CPU effort for encoding (AVIF/HEIC: 0-9, GIF/PNG: 1-10, JXL: 1-9, WebP: 0-6)    |
 | `blur`        | boolean | Apply blur effect                                                               |
 | `greyscale`   | boolean | Convert to greyscale                                                            |
 | `lossless`    | boolean | Use lossless compression (where supported)                                      |
