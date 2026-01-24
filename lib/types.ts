@@ -64,7 +64,7 @@ export interface ImageOptions {
   width?: number;
   height?: number;
   quality?: number;
-  blur?: boolean;
+  blur?: boolean | number;
   greyscale?: boolean;
   lossless?: boolean;
   progressive?: boolean;
