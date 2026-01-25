@@ -158,6 +158,15 @@ export class PipelineExecutor {
       if (!task.output.key || typeof task.output.key !== "string") {
         throw new HttpError(400, `task[${i}]: output.key is required`);
       }
+
+      if (
+        task.metadata !== undefined &&
+        (typeof task.metadata !== "object" ||
+          task.metadata === null ||
+          Array.isArray(task.metadata))
+      ) {
+        throw new HttpError(400, `task[${i}]: metadata must be an object`);
+      }
     }
   }
 
@@ -189,10 +198,24 @@ export class PipelineExecutor {
       preset: validatePresetStrict(t.preset, prefix),
     };
 
+    // Parse metadata options if provided (empty object returns basic metadata)
+    let metadata: ParsedTask["metadata"];
+    if (task.metadata) {
+      const metaPrefix = `task[${index}].metadata`;
+      metadata = {
+        exif: validateBooleanStrict(task.metadata.exif, "exif", metaPrefix) ?? false,
+        stats: validateBooleanStrict(task.metadata.stats, "stats", metaPrefix) ?? false,
+        thumbhash:
+          validateBooleanStrict(task.metadata.thumbhash, "thumbhash", metaPrefix) ??
+          false,
+      };
+    }
+
     return {
       id: task.id,
       options,
       output: task.output,
+      metadata,
     };
   }
 
@@ -218,6 +241,17 @@ export class PipelineExecutor {
         },
       );
 
+      // Extract metadata from transformed output if requested
+      let metadata: MetadataResult | undefined;
+      if (task.metadata) {
+        metadata = await this.engine.metadata({
+          data: result.data,
+          exif: task.metadata.exif,
+          stats: task.metadata.stats,
+          thumbhash: task.metadata.thumbhash,
+        });
+      }
+
       return {
         id: task.id,
         status: "success",
@@ -234,6 +268,7 @@ export class PipelineExecutor {
             this.s3Endpoint,
           ),
         },
+        metadata,
       };
     } catch (err) {
       return {
@@ -250,4 +285,9 @@ interface ParsedTask {
   id: string;
   options: Omit<ImageOptions, "data">;
   output: PipelineTask["output"];
+  metadata?: {
+    exif: boolean;
+    stats: boolean;
+    thumbhash: boolean;
+  };
 }

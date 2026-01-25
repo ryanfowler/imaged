@@ -373,7 +373,8 @@ PUT /pipeline  (requires --enable-pipeline)
     {
       "id": "thumbnail",
       "transform": { "format": "webp", "width": 150, "height": 150, "fit": "cover" },
-      "output": { "bucket": "my-bucket", "key": "images/thumb.webp" }
+      "output": { "bucket": "my-bucket", "key": "images/thumb.webp" },
+      "metadata": { "thumbhash": true }
     },
     {
       "id": "full",
@@ -382,7 +383,8 @@ PUT /pipeline  (requires --enable-pipeline)
         "bucket": "my-bucket",
         "key": "images/full.avif",
         "acl": "public-read"
-      }
+      },
+      "metadata": {}
     }
   ]
 }
@@ -406,8 +408,21 @@ Each task in the `tasks` array requires:
 | `output.key`         | string | S3 object key                                       |
 | `output.acl`         | string | S3 ACL (e.g., `public-read`)                        |
 | `output.contentType` | string | Override auto-detected MIME type                    |
+| `metadata`           | object | Extract metadata from the transformed output        |
+| `metadata.exif`      | bool   | Include EXIF data in output metadata                |
+| `metadata.stats`     | bool   | Include image statistics in output metadata         |
+| `metadata.thumbhash` | bool   | Generate thumbhash for output image                 |
 
 Transform options are the same as the `/transform` endpoint: `format`, `width`, `height`, `quality`, `effort`, `blur`, `greyscale`, `lossless`, `progressive`, `fit`, `kernel`, `position`, `preset`.
+
+#### Metadata Options
+
+The pipeline supports two types of metadata extraction:
+
+- **Global metadata** (`config.metadata`): Extracts metadata from the **source** image before transformation
+- **Per-task metadata** (`task.metadata`): Extracts metadata from each task's **transformed output**
+
+Both can be used together. Providing an empty `metadata` object (e.g., `"metadata": {}`) returns basic metadata (dimensions, format, etc.) without EXIF, stats, or thumbhash.
 
 #### Response
 
@@ -431,6 +446,13 @@ Transform options are the same as the `/transform` endpoint: `format`, `width`, 
         "height": 150,
         "size": 8234,
         "url": "https://my-bucket.s3.us-east-1.amazonaws.com/images/thumb.webp"
+      },
+      "metadata": {
+        "format": "webp",
+        "width": 150,
+        "height": 150,
+        "size": 8234,
+        "thumbhash": "HBkSHYSIeHiP..."
       }
     },
     {
@@ -443,6 +465,12 @@ Transform options are the same as the `/transform` endpoint: `format`, `width`, 
         "height": 3000,
         "size": 524288,
         "url": "https://my-bucket.s3.us-east-1.amazonaws.com/images/full.avif"
+      },
+      "metadata": {
+        "format": "avif",
+        "width": 4000,
+        "height": 3000,
+        "size": 524288
       }
     }
   ]
