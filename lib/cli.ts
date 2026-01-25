@@ -5,7 +5,23 @@ import type { S3Config } from "./types.ts";
 
 import fs from "node:fs";
 
-import { Command } from "commander";
+import { Command, Option } from "commander";
+
+/**
+ * Parse boolean string values from environment variables or CLI arguments.
+ * Accepts "true", "1" as true; "false", "0" as false.
+ */
+export function parseBool(value: string): boolean {
+  const lower = value.toLowerCase();
+  if (lower === "true" || lower === "1") {
+    return true;
+  }
+  if (lower === "false" || lower === "0") {
+    return false;
+  }
+  // For invalid values, treat as truthy (flag was specified)
+  return true;
+}
 
 export interface CLIOptions {
   port: number;
@@ -61,39 +77,95 @@ export function parseArgs(): CLIOptions {
         return option.flags;
       },
     })
-    .option("-a, --allowed-hosts <regex>", "Regex pattern for allowed fetch hosts")
-    .option(
-      "-b, --body-limit <bytes>",
-      "Max request body size in bytes",
-      String(1 << 24),
+    .addOption(
+      new Option(
+        "-a, --allowed-hosts <regex>",
+        "Regex pattern for allowed fetch hosts",
+      ).env("ALLOWED_HOSTS"),
     )
-    .option(
-      "-c, --concurrency <number>",
-      "Max concurrent image operations",
-      String(defaultConcurrency),
+    .addOption(
+      new Option("-b, --body-limit <bytes>", "Max request body size in bytes")
+        .default(String(1 << 24))
+        .env("BODY_LIMIT"),
     )
-    .option("-f, --enable-fetch", "Enable GET endpoints that fetch remote URLs", false)
+    .addOption(
+      new Option("-c, --concurrency <number>", "Max concurrent image operations")
+        .default(String(defaultConcurrency))
+        .env("CONCURRENCY"),
+    )
+    .addOption(
+      new Option(
+        "-f, --enable-fetch [bool]",
+        "Enable GET endpoints that fetch remote URLs",
+      )
+        .preset("true")
+        .default(false)
+        .argParser(parseBool)
+        .env("ENABLE_FETCH"),
+    )
     .helpOption("-h --help", "Display help")
-    .option(
-      "--disable-ssrf-protection",
-      "Disable SSRF protection (allow requests to private IPs)",
-      false,
+    .addOption(
+      new Option(
+        "--disable-ssrf-protection [bool]",
+        "Disable SSRF protection (allow requests to private IPs)",
+      )
+        .preset("true")
+        .default(false)
+        .argParser(parseBool)
+        .env("DISABLE_SSRF_PROTECTION"),
     )
-    .option("-H, --host <address>", "HTTP host to bind to")
-    .option("-l, --log-format <format>", "Log format: json or text", "text")
-    .option("-L, --log-level <level>", "Log level: debug, info, warn, or error", "info")
-    .option("-x, --pixel-limit <pixels>", "Max input image pixels", String(100_000_000))
-    .option(
-      "-d, --dimension-limit <pixels>",
-      "Max output width/height in pixels",
-      String(16384),
+    .addOption(new Option("-H, --host <address>", "HTTP host to bind to").env("HOST"))
+    .addOption(
+      new Option("-l, --log-format <format>", "Log format: json or text")
+        .default("text")
+        .env("LOG_FORMAT"),
     )
-    .option("-p, --port <number>", "HTTP port to listen on", "8000")
-    .option("--tls-cert <path>", "Path to TLS certificate file")
-    .option("--tls-key <path>", "Path to TLS private key file")
-    .option("-u, --unix <path>", "Unix socket path (overrides port/host)")
-    .option("-P, --enable-pipeline", "Enable the /pipeline endpoint (Bun only)", false)
-    .option("--max-pipeline-tasks <number>", "Maximum tasks per pipeline request", "10")
+    .addOption(
+      new Option("-L, --log-level <level>", "Log level: debug, info, warn, or error")
+        .default("info")
+        .env("LOG_LEVEL"),
+    )
+    .addOption(
+      new Option("-x, --pixel-limit <pixels>", "Max input image pixels")
+        .default(String(100_000_000))
+        .env("PIXEL_LIMIT"),
+    )
+    .addOption(
+      new Option("-d, --dimension-limit <pixels>", "Max output width/height in pixels")
+        .default(String(16384))
+        .env("DIMENSION_LIMIT"),
+    )
+    .addOption(
+      new Option("-p, --port <number>", "HTTP port to listen on")
+        .default("8000")
+        .env("PORT"),
+    )
+    .addOption(
+      new Option("--tls-cert <path>", "Path to TLS certificate file").env("TLS_CERT"),
+    )
+    .addOption(
+      new Option("--tls-key <path>", "Path to TLS private key file").env("TLS_KEY"),
+    )
+    .addOption(
+      new Option("-u, --unix <path>", "Unix socket path (overrides port/host)").env(
+        "UNIX_SOCKET",
+      ),
+    )
+    .addOption(
+      new Option(
+        "-P, --enable-pipeline [bool]",
+        "Enable the /pipeline endpoint (Bun only)",
+      )
+        .preset("true")
+        .default(false)
+        .argParser(parseBool)
+        .env("ENABLE_PIPELINE"),
+    )
+    .addOption(
+      new Option("--max-pipeline-tasks <number>", "Maximum tasks per pipeline request")
+        .default("10")
+        .env("MAX_PIPELINE_TASKS"),
+    )
     .version(VERSION, undefined, "Output the version")
     .parse();
 

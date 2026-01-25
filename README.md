@@ -100,6 +100,44 @@ curl -X PUT "http://localhost:8000/metadata?exif=true" \
 | `    --tls-cert <path>`         | Path to TLS certificate file                | -           |
 | `    --tls-key <path>`          | Path to TLS private key file                | -           |
 
+## Environment Variables
+
+All CLI options can also be configured via environment variables. CLI flags take precedence over environment variables, which take precedence over defaults.
+
+| Environment Variable      | CLI Equivalent              | Description                                 |
+| ------------------------- | --------------------------- | ------------------------------------------- |
+| `PORT`                    | `--port`                    | HTTP port to listen on                      |
+| `HOST`                    | `--host`                    | HTTP host to bind to                        |
+| `UNIX_SOCKET`             | `--unix`                    | Unix socket path                            |
+| `CONCURRENCY`             | `--concurrency`             | Max concurrent image operations             |
+| `BODY_LIMIT`              | `--body-limit`              | Max request body size in bytes              |
+| `PIXEL_LIMIT`             | `--pixel-limit`             | Max input image pixels                      |
+| `DIMENSION_LIMIT`         | `--dimension-limit`         | Max output width/height in pixels           |
+| `ENABLE_FETCH`            | `--enable-fetch`            | Enable GET endpoints (`true`/`false`)       |
+| `ALLOWED_HOSTS`           | `--allowed-hosts`           | Regex pattern for allowed fetch hosts       |
+| `DISABLE_SSRF_PROTECTION` | `--disable-ssrf-protection` | Disable SSRF protection (`true`/`false`)    |
+| `ENABLE_PIPELINE`         | `--enable-pipeline`         | Enable pipeline endpoint (`true`/`false`)   |
+| `MAX_PIPELINE_TASKS`      | `--max-pipeline-tasks`      | Max tasks per pipeline request              |
+| `LOG_FORMAT`              | `--log-format`              | Log format: `json` or `text`                |
+| `LOG_LEVEL`               | `--log-level`               | Log level: `debug`, `info`, `warn`, `error` |
+| `TLS_CERT`                | `--tls-cert`                | Path to TLS certificate file                |
+| `TLS_KEY`                 | `--tls-key`                 | Path to TLS private key file                |
+
+Boolean environment variables accept `true`, `1`, `false`, or `0`.
+
+**Examples:**
+
+```bash
+# Using environment variables
+PORT=3000 ENABLE_FETCH=true bun run index.ts
+
+# CLI flags override environment variables
+PORT=3000 bun run index.ts --port 8080  # Uses port 8080
+
+# Docker with environment variables
+docker run -p 3000:3000 -e PORT=3000 -e ENABLE_FETCH=true ghcr.io/ryanfowler/imaged:latest
+```
+
 ## API Reference
 
 ### Health Check
