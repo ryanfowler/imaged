@@ -63,7 +63,7 @@ PORT=3000 bun run index.ts --port 8080  # Uses port 8080
 **Docker with environment variables:**
 
 ```bash
-docker run -p 3000:3000 -e PORT=3000 -e ENABLE_FETCH=true ghcr.io/ryanfowler/imaged:latest
+docker run -p 3000:3000 -e PORT=3000 -e ENABLE_FETCH=1 ghcr.io/ryanfowler/imaged:latest
 ```
 
 ## TLS

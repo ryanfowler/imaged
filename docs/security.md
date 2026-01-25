@@ -4,7 +4,7 @@ This document covers security features for protecting imaged when fetching remot
 
 ## Why `--enable-fetch` is Opt-In
 
-The `--enable-fetch` flag enables GET endpoints that fetch images from remote URLs. This is disabled by default because:
+The `--enable-fetch` flag (or `ENABLE_FETCH=1` environment variable) enables GET endpoints that fetch images from remote URLs. This is disabled by default because:
 
 1. **Attack Surface**: Allows external URLs to be processed, requiring SSRF protection
 2. **Resource Usage**: Remote fetches consume bandwidth and can be slow
