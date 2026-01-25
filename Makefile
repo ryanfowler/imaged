@@ -6,11 +6,13 @@ all:
 	@echo "make <cmd>"
 	@echo ""
 	@echo "commands:"
-	@echo "  build       - build the imaged docker container"
-	@echo "  run         - start the imaged service in a docker container"
+	@echo "  build          - build the imaged docker container"
+	@echo "  run            - start the imaged service in a docker container"
+	@echo "  build-extended - build the imaged-extended docker container (global libvips)"
+	@echo "  run-extended   - start the imaged-extended service in a docker container"
 	@echo ""
 	@echo "options:"
-	@echo "  ARGS=...    - pass arguments to the container (e.g. make run ARGS='--port 3000')"
+	@echo "  ARGS=...       - pass arguments to the container (e.g. make run ARGS='--port 3000')"
 
 .PHONY: build
 build:
@@ -19,3 +21,11 @@ build:
 .PHONY: run
 run: build
 	@docker run -it --rm --init --network host --name imaged imaged $(ARGS)
+
+.PHONY: build-extended
+build-extended:
+	@docker build -f Dockerfile.extended -t imaged-extended .
+
+.PHONY: run-extended
+run-extended: build-extended
+	@docker run -it --rm --init --network host --name imaged-extended imaged-extended $(ARGS)

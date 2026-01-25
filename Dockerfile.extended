@@ -1,0 +1,189 @@
+# syntax=docker/dockerfile:1.7
+
+# Build libvips from source (Debian's version is too old for Sharp)
+FROM debian:trixie-slim AS vips-build
+
+# Install build dependencies for libvips
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    meson \
+    ninja-build \
+    pkg-config \
+    ca-certificates \
+    curl \
+    # Core dependencies
+    libglib2.0-dev \
+    libexpat1-dev \
+    # Image format libraries
+    libjpeg-dev \
+    libpng-dev \
+    libwebp-dev \
+    libtiff-dev \
+    libgif-dev \
+    libheif-dev \
+    libjxl-dev \
+    libcgif-dev \
+    # Other optional dependencies
+    libexif-dev \
+    liblcms2-dev \
+    libfftw3-dev \
+    liborc-0.4-dev \
+    librsvg2-dev \
+    libpoppler-glib-dev \
+    libpango1.0-dev \
+    libarchive-dev \
+    libimagequant-dev \
+  && rm -rf /var/lib/apt/lists/*
+
+# Download and build libvips 8.18.0
+WORKDIR /build
+RUN curl -fsSL https://github.com/libvips/libvips/releases/download/v8.18.0/vips-8.18.0.tar.xz | tar xJ
+
+WORKDIR /build/vips-8.18.0
+RUN meson setup build --prefix=/usr/local --buildtype=release \
+  && meson compile -C build \
+  && meson install -C build \
+  # Strip debug symbols from libvips libraries
+  && find /usr/local/lib -name '*.so*' -type f -exec strip --strip-unneeded {} \; 2>/dev/null || true
+
+# Build bun application with global libvips
+FROM oven/bun:1.3-slim AS build
+WORKDIR /app
+
+# Copy libvips from vips-build stage
+COPY --from=vips-build /usr/local /usr/local
+
+# Install build tools and dev dependencies for Sharp compilation
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    make \
+    g++ \
+    nodejs \
+    npm \
+    pkg-config \
+    # Dev packages needed for pkg-config during Sharp build
+    libglib2.0-dev \
+    libexpat1-dev \
+    libjpeg-dev \
+    libpng-dev \
+    libwebp-dev \
+    libtiff-dev \
+    libgif-dev \
+    libheif-dev \
+    libjxl-dev \
+    libcgif-dev \
+    libexif-dev \
+    liblcms2-dev \
+    libfftw3-dev \
+    liborc-0.4-dev \
+    librsvg2-dev \
+    libpoppler-glib-dev \
+    libpango1.0-dev \
+    libarchive-dev \
+    libimagequant-dev \
+  && rm -rf /var/lib/apt/lists/* \
+  && ldconfig
+
+# Set PKG_CONFIG_PATH for libvips
+ENV PKG_CONFIG_PATH=/usr/local/lib/aarch64-linux-gnu/pkgconfig:/usr/local/lib/x86_64-linux-gnu/pkgconfig:/usr/local/lib/pkgconfig
+
+COPY package.json bun.lock ./
+
+# Install dependencies first
+RUN --mount=type=cache,target=/root/.bun \
+    bun install --frozen-lockfile
+
+# Remove prebuilt Sharp binaries and rebuild from source with global libvips
+RUN rm -rf node_modules/@img/sharp-* node_modules/sharp \
+  && SHARP_FORCE_GLOBAL_LIBVIPS=1 npm install --no-save sharp
+
+# Prune devDependencies (node-gyp, node-addon-api, prettier, typescript, bun-types and their deps)
+RUN npm prune --omit=dev
+
+# Prune unnecessary files
+RUN rm -rf node_modules/*/.git \
+           node_modules/*/docs \
+           node_modules/*/test \
+           node_modules/*/tests \
+           node_modules/*/*.md \
+           node_modules/*/Makefile \
+           node_modules/**/test \
+           node_modules/**/tests
+
+COPY . .
+
+# Runtime with global libvips
+FROM debian:trixie-slim
+
+LABEL org.opencontainers.image.source="https://github.com/ryanfowler/imaged"
+LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.title="imaged"
+LABEL org.opencontainers.image.description="A high-performance HTTP server for on-the-fly image processing"
+LABEL org.opencontainers.image.url="https://github.com/ryanfowler/imaged"
+LABEL org.opencontainers.image.documentation="https://github.com/ryanfowler/imaged#readme"
+LABEL org.opencontainers.image.vendor="Ryan Fowler"
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libglib2.0-0t64 \
+    libexpat1 \
+    libjpeg62-turbo \
+    libpng16-16t64 \
+    libwebp7 \
+    libwebpmux3 \
+    libwebpdemux2 \
+    libtiff6 \
+    libgif7 \
+    libheif1 \
+    libjxl0.11 \
+    libcgif0 \
+    libexif12 \
+    liblcms2-2 \
+    libfftw3-double3 \
+    liborc-0.4-0t64 \
+    librsvg2-2 \
+    libpoppler-glib8t64 \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
+    libarchive13t64 \
+    libimagequant0 \
+    libmimalloc3 \
+    ca-certificates \
+  && rm -rf /var/lib/apt/lists/* \
+            /usr/share/doc \
+            /usr/share/man \
+            /usr/share/info \
+            /usr/share/locale \
+            /usr/share/X11 \
+            /usr/share/libthai \
+            /usr/share/perl5 \
+            /usr/share/bash-completion \
+            /usr/share/gnupg \
+            /usr/share/terminfo \
+            /usr/share/gcc \
+            /usr/share/pam \
+            /var/log/* \
+            /var/cache/* \
+  # Remove unnecessary libraries pulled in as transitive deps
+  && rm -f /usr/lib/*-linux-gnu/libapt-pkg.so* \
+           /usr/lib/*-linux-gnu/libsystemd.so* \
+           /usr/lib/*-linux-gnu/libdb-*.so* \
+  && ln -s /usr/lib/*-linux-gnu/libmimalloc.so.3.0 /usr/lib/libmimalloc.so
+
+# Copy only libvips shared libraries and modules (not headers, pkgconfig, static libs, or binaries)
+# Must preserve the arch-specific path for modules since libvips looks there at runtime
+COPY --from=vips-build /usr/local/lib/ /usr/local/lib/
+RUN find /usr/local/lib -name '*.a' -delete \
+  && rm -rf /usr/local/lib/*/pkgconfig \
+  && ldconfig
+
+WORKDIR /app
+
+COPY --link --from=build /usr/local/bin/bun /usr/local/bin/bun
+COPY --link --from=build /app/index.ts /app/package.json /app/
+COPY --link --from=build /app/lib /app/lib
+COPY --link --from=build /app/node_modules /app/node_modules
+
+ENV LD_PRELOAD=/usr/lib/libmimalloc.so
+
+ENTRYPOINT ["bun", "index.ts"]
