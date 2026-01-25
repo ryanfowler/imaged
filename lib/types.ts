@@ -235,6 +235,11 @@ export interface PipelineTask {
     preset?: ImagePreset;
   };
   output: S3Output;
+  metadata?: {
+    exif?: boolean;
+    stats?: boolean;
+    thumbhash?: boolean;
+  };
 }
 
 export interface S3Output {
@@ -262,6 +267,7 @@ export interface TaskResult {
     size: number;
     url: string;
   };
+  metadata?: MetadataResult;
   error?: string;
 }
 
