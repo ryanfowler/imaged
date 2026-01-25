@@ -8,6 +8,7 @@ Built with [Bun](https://bun.sh) and powered by [Sharp](https://sharp.pixelplumb
 
 - **Transform images** — Resize, crop, blur, convert to greyscale, and change formats
 - **Extract metadata** — Dimensions, EXIF data, image statistics, and [thumbhash](https://evanw.github.io/thumbhash/) placeholders
+- **Batch processing** — Process one image into multiple outputs and upload directly to S3 (Bun only)
 - **Wide format support** — AVIF, GIF, HEIC, JPEG, JPEG XL, PNG, SVG, TIFF, and WebP
 - **Production ready** — Configurable concurrency, request limits, TLS, and structured logging
 
@@ -92,6 +93,8 @@ curl -X PUT "http://localhost:8000/metadata?exif=true" \
 | `-f, --enable-fetch`            | Enable GET endpoints that fetch remote URLs | false       |
 | `-a, --allowed-hosts <regex>`   | Regex pattern for allowed fetch hosts       | -           |
 | `    --disable-ssrf-protection` | Disable SSRF protection for fetch requests  | false       |
+| `-P, --enable-pipeline`         | Enable the /pipeline endpoint (Bun only)    | false       |
+| `    --max-pipeline-tasks <n>`  | Max tasks per pipeline request              | 10          |
 | `-l, --log-format <format>`     | Log format: `json` or `text`                | text        |
 | `-L, --log-level <level>`       | Log level: `debug`, `info`, `warn`, `error` | info        |
 | `    --tls-cert <path>`         | Path to TLS certificate file                | -           |
@@ -308,6 +311,173 @@ curl -X PUT \
   "format": "jpeg",
   "thumbhash": "3OcRJYB4d3h/iIeHeEh3eIhw+j3A"
 }
+```
+
+---
+
+### Pipeline (Batch Processing)
+
+Process a single image into multiple transformed outputs and upload them directly to S3. This endpoint is only available when running on Bun with the `--enable-pipeline` flag and valid AWS credentials.
+
+```
+PUT /pipeline  (requires --enable-pipeline)
+```
+
+#### Request Formats
+
+**JSON with URL fetch** (`Content-Type: application/json`) — requires `--enable-fetch`:
+
+```json
+{
+  "url": "https://example.com/image.jpg",
+  "metadata": { "exif": true, "thumbhash": true },
+  "tasks": [
+    {
+      "id": "thumbnail",
+      "transform": { "format": "webp", "width": 150, "height": 150, "fit": "cover" },
+      "output": { "bucket": "my-bucket", "key": "images/thumb.webp" }
+    },
+    {
+      "id": "full",
+      "transform": { "format": "avif", "quality": 80 },
+      "output": {
+        "bucket": "my-bucket",
+        "key": "images/full.avif",
+        "acl": "public-read"
+      }
+    }
+  ]
+}
+```
+
+**Multipart form-data** (`Content-Type: multipart/form-data`):
+
+- `config` part: JSON configuration (same structure as above, without `url`)
+- `file` part: Binary image data
+
+#### Task Configuration
+
+Each task in the `tasks` array requires:
+
+| Field                | Type   | Description                                         |
+| -------------------- | ------ | --------------------------------------------------- |
+| `id`                 | string | Unique identifier for the task                      |
+| `transform.format`   | string | Output format (required)                            |
+| `transform.*`        | varies | Any transform option (width, height, quality, etc.) |
+| `output.bucket`      | string | S3 bucket name                                      |
+| `output.key`         | string | S3 object key                                       |
+| `output.acl`         | string | S3 ACL (e.g., `public-read`)                        |
+| `output.contentType` | string | Override auto-detected MIME type                    |
+
+Transform options are the same as the `/transform` endpoint: `format`, `width`, `height`, `quality`, `effort`, `blur`, `greyscale`, `lossless`, `progressive`, `fit`, `kernel`, `position`, `preset`.
+
+#### Response
+
+```json
+{
+  "totalDurationMs": 245,
+  "metadata": {
+    "format": "jpeg",
+    "width": 4000,
+    "height": 3000,
+    "thumbhash": "YJeGBwY3d4eId..."
+  },
+  "tasks": [
+    {
+      "id": "thumbnail",
+      "status": "success",
+      "durationMs": 45,
+      "output": {
+        "format": "webp",
+        "width": 150,
+        "height": 150,
+        "size": 8234,
+        "url": "https://my-bucket.s3.us-east-1.amazonaws.com/images/thumb.webp"
+      }
+    },
+    {
+      "id": "full",
+      "status": "success",
+      "durationMs": 180,
+      "output": {
+        "format": "avif",
+        "width": 4000,
+        "height": 3000,
+        "size": 524288,
+        "url": "https://my-bucket.s3.us-east-1.amazonaws.com/images/full.avif"
+      }
+    }
+  ]
+}
+```
+
+Failed tasks include an `error` field instead of `output`:
+
+```json
+{
+  "id": "failed-task",
+  "status": "failed",
+  "durationMs": 5,
+  "error": "S3 upload failed: Access Denied"
+}
+```
+
+#### S3 Configuration
+
+The pipeline endpoint requires AWS credentials configured via environment variables:
+
+| Variable                | Required | Default     | Description                                     |
+| ----------------------- | -------- | ----------- | ----------------------------------------------- |
+| `AWS_ACCESS_KEY_ID`     | Yes      | -           | AWS access key                                  |
+| `AWS_SECRET_ACCESS_KEY` | Yes      | -           | AWS secret key                                  |
+| `AWS_REGION`            | No       | `us-east-1` | AWS region                                      |
+| `AWS_ENDPOINT_URL`      | No       | -           | Custom S3 endpoint (for S3-compatible services) |
+
+If `--enable-pipeline` is set but credentials are missing, the server will exit with an error.
+
+#### Examples
+
+**JSON request with URL fetch:**
+
+```bash
+curl -X PUT http://localhost:8000/pipeline \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://example.com/photo.jpg",
+    "tasks": [
+      {
+        "id": "thumb",
+        "transform": { "format": "webp", "width": 200 },
+        "output": { "bucket": "my-bucket", "key": "thumb.webp" }
+      }
+    ]
+  }'
+```
+
+**Multipart request with file upload:**
+
+```bash
+curl -X PUT http://localhost:8000/pipeline \
+  -F 'config={"tasks":[{"id":"t1","transform":{"format":"webp","width":300},"output":{"bucket":"my-bucket","key":"out.webp"}}]}' \
+  -F 'file=@photo.jpg'
+```
+
+**Start the server with pipeline enabled:**
+
+```bash
+AWS_ACCESS_KEY_ID=your-key \
+AWS_SECRET_ACCESS_KEY=your-secret \
+AWS_REGION=us-west-2 \
+bun run index.ts --enable-pipeline --enable-fetch
+```
+
+**Using with S3-compatible services (e.g., DigitalOcean Spaces, LocalStack):**
+
+```bash
+AWS_ACCESS_KEY_ID=your-key \
+AWS_SECRET_ACCESS_KEY=your-secret \
+AWS_ENDPOINT_URL=https://nyc3.digitaloceanspaces.com \
+bun run index.ts --enable-pipeline
 ```
 
 ## Parameter Validation

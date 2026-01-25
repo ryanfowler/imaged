@@ -3,15 +3,33 @@ import type { Logger } from "pino";
 import { RUNTIME_VERSION, VERSION } from "./cli.ts";
 import type { Client } from "./fetch.ts";
 import { ImageEngine } from "./image.ts";
+import type { PipelineExecutor } from "./pipeline.ts";
 import {
   HttpError,
-  IMAGE_PRESETS,
   ImageFit,
   ImageKernel,
   ImagePosition,
   type ImagePreset,
+  type PipelineConfig,
   ImageType,
 } from "./types.ts";
+import {
+  addWarning,
+  getMimetype,
+  IMAGE_TYPE_SET,
+  normalizeFormat,
+  parseBlurLenient,
+  parseBooleanLenient,
+  parseDimensionLenient,
+  parseEffortLenient,
+  parseFitLenient,
+  parseKernelLenient,
+  type ParseContext,
+  parsePositionLenient,
+  parsePresetLenient,
+  parseQualityLenient,
+  VALID_FORMATS,
+} from "./validation.ts";
 
 import fs from "node:fs";
 import fsp from "node:fs/promises";
@@ -23,6 +41,7 @@ import Fastify, {
   type FastifyReply,
   type FastifyRequest,
 } from "fastify";
+import multipart from "@fastify/multipart";
 
 export interface ServeOptions {
   port: number;
@@ -31,6 +50,7 @@ export interface ServeOptions {
   enableFetch: boolean;
   tlsCert?: string;
   tlsKey?: string;
+  pipelineExecutor?: PipelineExecutor;
 }
 
 export class Server {
@@ -91,9 +111,25 @@ export class Server {
       });
     }
 
+    server.addContentTypeParser(
+      "application/json",
+      { parseAs: "buffer" },
+      (_, body, done) => {
+        done(null, body);
+      },
+    );
     server.addContentTypeParser("*", { parseAs: "buffer" }, (_, body, done) => {
       done(null, body);
     });
+
+    // Register multipart plugin if pipeline is enabled
+    if (options.pipelineExecutor) {
+      await server.register(multipart, {
+        limits: {
+          fileSize: this.bodyLimit,
+        },
+      });
+    }
 
     server.get("/healthz", this.healthz);
     server.put("/transform", this.transformPut);
@@ -102,6 +138,14 @@ export class Server {
     if (options.enableFetch) {
       server.get("/transform", this.transformGet);
       server.get("/metadata", this.metadataGet);
+    }
+
+    // Register pipeline endpoint if enabled
+    if (options.pipelineExecutor) {
+      const pipelineExecutor = options.pipelineExecutor;
+      server.put("/pipeline", async (request: FastifyRequest, reply: FastifyReply) => {
+        await this.handlePipeline(request, reply, pipelineExecutor);
+      });
     }
 
     return await server.listen({
@@ -245,6 +289,66 @@ export class Server {
       encoders: this.engine.encoders,
     });
   };
+
+  private handlePipeline = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+    executor: PipelineExecutor,
+  ) => {
+    const contentType = request.headers["content-type"] || "";
+
+    let config: PipelineConfig;
+    let imageData: Uint8Array | undefined;
+
+    if (contentType.includes("multipart/form-data")) {
+      // Handle multipart request
+      const parts = request.parts();
+      let configPart: string | undefined;
+      let filePart: Buffer | undefined;
+
+      for await (const part of parts) {
+        if (part.type === "field" && part.fieldname === "config") {
+          configPart = part.value as string;
+        } else if (part.type === "file" && part.fieldname === "file") {
+          filePart = await part.toBuffer();
+        }
+      }
+
+      if (!configPart) {
+        throw new HttpError(400, "missing 'config' part in multipart request");
+      }
+
+      try {
+        config = JSON.parse(configPart) as PipelineConfig;
+      } catch {
+        throw new HttpError(400, "invalid JSON in 'config' part");
+      }
+
+      if (!filePart) {
+        throw new HttpError(400, "missing 'file' part in multipart request");
+      }
+      imageData = filePart;
+    } else if (contentType.includes("application/json")) {
+      // Handle JSON request
+      if (!Buffer.isBuffer(request.body)) {
+        throw new HttpError(400, "request body must be JSON");
+      }
+
+      try {
+        config = JSON.parse(request.body.toString()) as PipelineConfig;
+      } catch {
+        throw new HttpError(400, "invalid JSON in request body");
+      }
+    } else {
+      throw new HttpError(
+        400,
+        "Content-Type must be application/json or multipart/form-data",
+      );
+    }
+
+    const result = await executor.execute(config, imageData);
+    return reply.send(result);
+  };
 }
 
 interface Options {
@@ -263,18 +367,7 @@ interface Options {
   preset?: ImagePreset;
 }
 
-// Parse context for strict mode validation
-interface ParseWarning {
-  param: string;
-  value: string;
-  reason: string;
-}
-
-interface ParseContext {
-  strict: boolean;
-  warnings: ParseWarning[];
-  dimensionLimit: number;
-}
+// ParseContext is imported from validation.ts
 
 interface ParseResult {
   options: Options;
@@ -289,19 +382,10 @@ interface MetadataParseResult {
 }
 
 function createParseContext(params: QueryParams, dimensionLimit: number): ParseContext {
-  const ctx = { strict: false, warnings: [], dimensionLimit };
-  const strict = parseBoolean(params, "strict", ctx);
+  const ctx: ParseContext = { strict: false, warnings: [], dimensionLimit };
+  const strict = parseBooleanLenient(params["strict"], "strict", ctx);
   ctx.strict = (ctx.warnings.length === 0 && strict) || false;
   return ctx;
-}
-
-function addWarning(
-  ctx: ParseContext,
-  param: string,
-  value: string,
-  reason: string,
-): void {
-  ctx.warnings.push({ param, value, reason });
 }
 
 // For /transform endpoint (plain text error)
@@ -383,18 +467,18 @@ function parseImageOps(
   const format = parseFormat(params, accept, ctx);
   const options: Options = {
     format,
-    width: parseDimension(params, "width", ctx),
-    height: parseDimension(params, "height", ctx),
-    quality: parseQuality(params, ctx),
-    blur: parseBlur(params, ctx),
-    greyscale: parseBoolean(params, "greyscale", ctx),
-    lossless: parseBoolean(params, "lossless", ctx),
-    progressive: parseBoolean(params, "progressive", ctx),
-    effort: parseEffort(params, format, ctx),
-    fit: parseImageFit(params, ctx),
-    kernel: parseImageKernel(params, ctx),
-    position: parseImagePosition(params, ctx),
-    preset: parseImagePreset(params, ctx),
+    width: parseDimensionLenient(params["width"], "width", ctx),
+    height: parseDimensionLenient(params["height"], "height", ctx),
+    quality: parseQualityLenient(params["quality"], ctx),
+    blur: parseBlurLenient(params["blur"], ctx),
+    greyscale: parseBooleanLenient(params["greyscale"], "greyscale", ctx),
+    lossless: parseBooleanLenient(params["lossless"], "lossless", ctx),
+    progressive: parseBooleanLenient(params["progressive"], "progressive", ctx),
+    effort: parseEffortLenient(params["effort"], format, ctx),
+    fit: parseFitLenient(params["fit"], ctx),
+    kernel: parseKernelLenient(params["kernel"], ctx),
+    position: parsePositionLenient(params["position"], ctx),
+    preset: parsePresetLenient(params["preset"], ctx),
   };
 
   throwIfErrorsText(ctx);
@@ -408,9 +492,9 @@ function parseMetadataOps(params: QueryParams): MetadataParseResult {
   validateKnownParams(params, KNOWN_METADATA_PARAMS, ctx);
 
   const result: MetadataParseResult = {
-    exif: parseBoolean(params, "exif", ctx) ?? false,
-    stats: parseBoolean(params, "stats", ctx) ?? false,
-    thumbhash: parseBoolean(params, "thumbhash", ctx) ?? false,
+    exif: parseBooleanLenient(params["exif"], "exif", ctx) ?? false,
+    stats: parseBooleanLenient(params["stats"], "stats", ctx) ?? false,
+    thumbhash: parseBooleanLenient(params["thumbhash"], "thumbhash", ctx) ?? false,
     ctx,
   };
 
@@ -419,7 +503,6 @@ function parseMetadataOps(params: QueryParams): MetadataParseResult {
 }
 
 const DEFAULT_FORMAT = ImageType.Jpeg;
-const VALID_FORMATS = Object.values(ImageType).join(", ");
 
 function parseFormat(
   params: QueryParams,
@@ -493,299 +576,17 @@ function parseFormat(
   return t;
 }
 
-function parseBoolean(
-  params: QueryParams,
-  key: string,
-  ctx: ParseContext,
-): boolean | undefined {
-  const v = params[key];
-  if (v == null) {
-    return undefined;
-  }
-  if (v === "false" || v === "0") {
-    return false;
-  }
-  if (v === "" || v === "true" || v === "1") {
-    return true;
-  }
-  // Invalid value - warn and treat as true
-  addWarning(ctx, key, v, "must be true, false, 1, or 0");
-  return true;
-}
-
-function parseBlur(
-  params: QueryParams,
-  ctx: ParseContext,
-): boolean | number | undefined {
-  const v = params["blur"];
-  if (v == null) {
-    return undefined;
-  }
-  if (v === "false" || v === "0") {
-    return undefined;
-  }
-  if (v === "" || v === "true" || v === "1") {
-    return true;
-  }
-  const n = Number(v);
-  if (!Number.isFinite(n)) {
-    addWarning(ctx, "blur", v, "must be a boolean or number between 0.3 and 1000");
-    return undefined;
-  }
-  if (n < 0.3) {
-    addWarning(ctx, "blur", v, "must be at least 0.3");
-    return 0.3;
-  }
-  if (n > 1000) {
-    addWarning(ctx, "blur", v, "must be at most 1000");
-    return 1000;
-  }
-  return n;
-}
-
-function parseQuality(params: QueryParams, ctx: ParseContext): number | undefined {
-  const v = params["quality"];
-  if (v == null || v === "") {
-    return undefined;
-  }
-  const value = parseU32Value(v);
-  if (value == null) {
-    addWarning(ctx, "quality", v, "must be a positive integer");
-    return undefined;
-  }
-  if (value < 1) {
-    addWarning(ctx, "quality", v, "must be at least 1");
-    return 1;
-  }
-  if (value > 100) {
-    addWarning(ctx, "quality", v, "must be at most 100");
-    return 100;
-  }
-  return value;
-}
-
-function parseEffort(
-  params: QueryParams,
-  format: ImageType,
-  ctx: ParseContext,
-): number | undefined {
-  const v = params["effort"];
-  if (v == null || v === "") {
-    return undefined;
-  }
-  const value = parseU32Value(v);
-  if (value == null) {
-    addWarning(ctx, "effort", v, "must be a positive integer");
-    return undefined;
-  }
-
-  let low;
-  let high;
-  switch (format) {
-    case ImageType.Avif:
-    case ImageType.Heic:
-      low = 0;
-      high = 9;
-      break;
-    case ImageType.Gif:
-    case ImageType.Png:
-      low = 1;
-      high = 10;
-      break;
-    case ImageType.JpegXL:
-      low = 1;
-      high = 9;
-      break;
-    case ImageType.Webp:
-      low = 0;
-      high = 6;
-      break;
-    default:
-      return undefined;
-  }
-  if (value < low) {
-    addWarning(ctx, "effort", v, `must be at least ${low} for ${format}`);
-    return low;
-  }
-  if (value > high) {
-    addWarning(ctx, "effort", v, `must be at most ${high} for ${format}`);
-    return high;
-  }
-  return value;
-}
-
-function parseDimension(
-  params: QueryParams,
-  key: string,
-  ctx: ParseContext,
-): number | undefined {
-  const v = params[key];
-  if (v == null || v === "") {
-    return undefined;
-  }
-
-  const value = parseU32Value(v);
-  if (value == null) {
-    addWarning(ctx, key, v, "must be a positive integer");
-    return undefined;
-  }
-  if (value < 1) {
-    addWarning(ctx, key, v, "must be at least 1");
-    return 1;
-  }
-  if (value > ctx.dimensionLimit) {
-    addWarning(ctx, key, v, `must be at most ${ctx.dimensionLimit}`);
-    return ctx.dimensionLimit;
-  }
-  return value;
-}
-
-// Helper function to parse a u32 value from a string
-function parseU32Value(v: string): number | undefined {
-  // strict-ish u32 parsing
-  const n = Number(v);
-  if (!Number.isFinite(n)) {
-    return undefined;
-  }
-  if (!Number.isInteger(n)) {
-    return undefined;
-  }
-  if (n < 0 || n > 0xffff_ffff) {
-    return undefined;
-  }
-  return n;
-}
-
-function getMimetype(format: ImageType): string {
-  switch (format) {
-    case ImageType.Avif:
-      return "image/avif";
-    case ImageType.Gif:
-      return "image/gif";
-    case ImageType.Heic:
-      return "image/heic";
-    case ImageType.Jpeg:
-      return "image/jpeg";
-    case ImageType.JpegXL:
-      return "image/jxl";
-    case ImageType.Png:
-      return "image/png";
-    case ImageType.Pdf:
-      return "application/pdf";
-    case ImageType.Raw:
-      return "application/octet-stream";
-    case ImageType.Svg:
-      return "image/svg+xml";
-    case ImageType.Tiff:
-      return "image/tiff";
-    case ImageType.Webp:
-      return "image/webp";
-  }
-}
-
 function getImageType(raw: string): ImageType | null {
-  switch (raw) {
-    case "avif":
-      return ImageType.Avif;
-    case "gif":
-      return ImageType.Gif;
-    case "heic":
-      return ImageType.Heic;
-    case "jpeg":
-    case "jpg":
-      return ImageType.Jpeg;
-    case "jxl":
-      return ImageType.JpegXL;
-    case "pdf":
-      return ImageType.Pdf;
-    case "png":
-      return ImageType.Png;
-    case "raw":
-      return ImageType.Raw;
-    case "svg":
-      return ImageType.Svg;
-    case "tiff":
-    case "tif":
-      return ImageType.Tiff;
-    case "webp":
-      return ImageType.Webp;
-    default:
-      return null;
+  const normalized = normalizeFormat(raw);
+  if (!IMAGE_TYPE_SET.has(normalized)) {
+    return null;
   }
-}
-
-const IMAGE_FIT_SET = new Set<string>(Object.values(ImageFit));
-const VALID_FITS = Object.values(ImageFit).join(", ");
-
-function parseImageFit(params: QueryParams, ctx: ParseContext): ImageFit | undefined {
-  const fit = params["fit"];
-  if (fit == null) {
-    return undefined;
-  }
-  if (!IMAGE_FIT_SET.has(fit)) {
-    addWarning(ctx, "fit", fit, `unknown value, valid: ${VALID_FITS}`);
-    return undefined;
-  }
-  return fit as ImageFit;
-}
-
-const IMAGE_KERNEL_SET = new Set<string>(Object.values(ImageKernel));
-const VALID_KERNELS = Object.values(ImageKernel).join(", ");
-
-function parseImageKernel(
-  params: QueryParams,
-  ctx: ParseContext,
-): ImageKernel | undefined {
-  const kernel = params["kernel"];
-  if (kernel == null) {
-    return undefined;
-  }
-  if (!IMAGE_KERNEL_SET.has(kernel)) {
-    addWarning(ctx, "kernel", kernel, `unknown value, valid: ${VALID_KERNELS}`);
-    return undefined;
-  }
-  return kernel as ImageKernel;
-}
-
-const IMAGE_POSITION_SET = new Set<string>(Object.values(ImagePosition));
-const VALID_POSITIONS = Object.values(ImagePosition).join(", ");
-
-function parseImagePosition(
-  params: QueryParams,
-  ctx: ParseContext,
-): ImagePosition | undefined {
-  const position = params["position"];
-  if (position == null) {
-    return undefined;
-  }
-  if (!IMAGE_POSITION_SET.has(position)) {
-    addWarning(ctx, "position", position, `unknown value, valid: ${VALID_POSITIONS}`);
-    return undefined;
-  }
-  return position as ImagePosition;
-}
-
-const IMAGE_PRESET_SET = new Set<string>(IMAGE_PRESETS);
-const VALID_PRESETS = IMAGE_PRESETS.join(", ");
-
-function parseImagePreset(
-  params: QueryParams,
-  ctx: ParseContext,
-): ImagePreset | undefined {
-  const preset = params["preset"];
-  if (preset == null) {
-    return undefined;
-  }
-  if (!IMAGE_PRESET_SET.has(preset)) {
-    addWarning(ctx, "preset", preset, `unknown value, valid: ${VALID_PRESETS}`);
-    return undefined;
-  }
-  return preset as ImagePreset;
+  return normalized as ImageType;
 }
 
 type QueryParams = Record<string, string | undefined>;
 
-// Export for testing
+// Export for testing and reuse
 export { createParseContext, parseImageOps, parseMetadataOps };
 
 function notFoundHandler(_req: FastifyRequest, reply: FastifyReply) {

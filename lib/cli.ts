@@ -1,5 +1,7 @@
 import pkg from "../package.json" with { type: "json" };
 import { logger, type LogFormat, type LogLevel } from "./logger.ts";
+import { parseS3Config } from "./s3.ts";
+import type { S3Config } from "./types.ts";
 
 import fs from "node:fs";
 
@@ -20,6 +22,9 @@ export interface CLIOptions {
   logLevel: LogLevel;
   tlsCert?: string;
   tlsKey?: string;
+  enablePipeline: boolean;
+  maxPipelineTasks: number;
+  s3Config?: S3Config;
 }
 
 interface RawOptions {
@@ -37,6 +42,8 @@ interface RawOptions {
   logLevel: string;
   tlsCert?: string;
   tlsKey?: string;
+  enablePipeline: boolean;
+  maxPipelineTasks: string;
 }
 
 export function parseArgs(): CLIOptions {
@@ -85,6 +92,8 @@ export function parseArgs(): CLIOptions {
     .option("--tls-cert <path>", "Path to TLS certificate file")
     .option("--tls-key <path>", "Path to TLS private key file")
     .option("-u, --unix <path>", "Unix socket path (overrides port/host)")
+    .option("-P, --enable-pipeline", "Enable the /pipeline endpoint (Bun only)", false)
+    .option("--max-pipeline-tasks <number>", "Maximum tasks per pipeline request", "10")
     .version(VERSION, undefined, "Output the version")
     .parse();
 
@@ -167,6 +176,31 @@ export function parseArgs(): CLIOptions {
     }
   }
 
+  const maxPipelineTasks = parseInt(opts.maxPipelineTasks, 10);
+  if (!Number.isInteger(maxPipelineTasks) || maxPipelineTasks <= 0) {
+    logger.fatal({ value: opts.maxPipelineTasks }, "Invalid max-pipeline-tasks");
+    process.exit(1);
+  }
+
+  // Validate pipeline configuration
+  let s3Config: S3Config | undefined;
+  if (opts.enablePipeline) {
+    // Check if running on Bun
+    if (!process.versions["bun"]) {
+      logger.fatal("Pipeline endpoint requires Bun runtime");
+      process.exit(1);
+    }
+
+    // Validate S3 credentials
+    s3Config = parseS3Config() ?? undefined;
+    if (!s3Config) {
+      logger.fatal(
+        "Pipeline endpoint requires AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environment variables",
+      );
+      process.exit(1);
+    }
+  }
+
   return {
     port,
     host: opts.host,
@@ -182,6 +216,9 @@ export function parseArgs(): CLIOptions {
     logLevel,
     tlsCert,
     tlsKey,
+    enablePipeline: opts.enablePipeline,
+    maxPipelineTasks,
+    s3Config,
   };
 }
 

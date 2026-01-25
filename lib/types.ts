@@ -209,3 +209,66 @@ export class HttpError extends Error {
     this.body = body;
   }
 }
+
+// Pipeline configuration
+export interface PipelineConfig {
+  url?: string; // For JSON requests (requires enableFetch)
+  metadata?: { exif?: boolean; stats?: boolean; thumbhash?: boolean };
+  tasks: PipelineTask[];
+}
+
+export interface PipelineTask {
+  id: string;
+  transform: {
+    format: ImageType;
+    width?: number;
+    height?: number;
+    quality?: number;
+    blur?: boolean | number;
+    greyscale?: boolean;
+    lossless?: boolean;
+    progressive?: boolean;
+    effort?: number;
+    fit?: ImageFit;
+    kernel?: ImageKernel;
+    position?: ImagePosition;
+    preset?: ImagePreset;
+  };
+  output: S3Output;
+}
+
+export interface S3Output {
+  bucket: string;
+  key: string;
+  acl?: string;
+  contentType?: string;
+}
+
+// Pipeline response
+export interface PipelineResponse {
+  totalDurationMs: number;
+  metadata?: MetadataResult;
+  tasks: TaskResult[];
+}
+
+export interface TaskResult {
+  id: string;
+  status: "success" | "failed";
+  durationMs: number;
+  output?: {
+    format: ImageType;
+    width: number;
+    height: number;
+    size: number;
+    url: string;
+  };
+  error?: string;
+}
+
+// S3 configuration (parsed from environment)
+export interface S3Config {
+  accessKeyId: string;
+  secretAccessKey: string;
+  region: string;
+  endpoint?: string;
+}

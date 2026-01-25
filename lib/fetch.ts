@@ -1,7 +1,12 @@
 import { validateUrlForSSRF } from "./ssrf.ts";
 import { HttpError } from "./types.ts";
 
-import type { ReadableStreamReadResult } from "node:stream/web";
+type ReadResult<T> = { done: false; value: T } | { done: true; value?: T };
+
+interface StreamReader<T> {
+  read(): Promise<ReadResult<T>>;
+  cancel(): Promise<void>;
+}
 
 const MAX_REDIRECTS = 10;
 
@@ -25,7 +30,7 @@ export class Client {
 
   async fetch(url: string): Promise<Uint8Array> {
     const res = await this.fetchWithRedirects(url);
-    const reader = res.body!.getReader();
+    const reader: StreamReader<Uint8Array> = res.body!.getReader();
 
     // Use Content-Length for early rejection and optimal pre-allocation.
     const contentLength = res.headers.get("content-length");
@@ -118,7 +123,7 @@ export class Client {
 
   // Reads the response body into a pre-allocated buffer when Content-Length is known.
   private async readWithKnownLength(
-    reader: ReadableStreamDefaultReader<Uint8Array>,
+    reader: StreamReader<Uint8Array>,
     expectedLength: number,
   ): Promise<Uint8Array> {
     const buffer = new Uint8Array(expectedLength);
@@ -150,9 +155,7 @@ export class Client {
   }
 
   // Reads the response body in chunks when Content-Length is unknown.
-  private async readChunked(
-    reader: ReadableStreamDefaultReader<Uint8Array>,
-  ): Promise<Uint8Array> {
+  private async readChunked(reader: StreamReader<Uint8Array>): Promise<Uint8Array> {
     const chunks: Uint8Array[] = [];
     let totalLength = 0;
 
@@ -174,8 +177,8 @@ export class Client {
 
   // Reads a single chunk from the stream, wrapping errors appropriately.
   private async readChunk(
-    reader: ReadableStreamDefaultReader<Uint8Array>,
-  ): Promise<ReadableStreamReadResult<Uint8Array>> {
+    reader: StreamReader<Uint8Array>,
+  ): Promise<ReadResult<Uint8Array>> {
     try {
       return await reader.read();
     } catch {
