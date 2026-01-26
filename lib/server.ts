@@ -50,6 +50,7 @@ export interface ServeOptions {
   enableFetch: boolean;
   tlsCert?: string;
   tlsKey?: string;
+  mtlsCa?: string;
   pipelineExecutor?: PipelineExecutor;
 }
 
@@ -87,6 +88,11 @@ export class Server {
           https: {
             cert: fs.readFileSync(options.tlsCert),
             key: fs.readFileSync(options.tlsKey),
+            ...(options.mtlsCa && {
+              ca: fs.readFileSync(options.mtlsCa),
+              requestCert: true,
+              rejectUnauthorized: true,
+            }),
           },
         }),
     });

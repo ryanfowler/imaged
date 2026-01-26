@@ -38,6 +38,7 @@ export interface CLIOptions {
   logLevel: LogLevel;
   tlsCert?: string;
   tlsKey?: string;
+  mtlsCa?: string;
   enablePipeline: boolean;
   maxPipelineTasks: number;
   s3Config?: S3Config;
@@ -58,6 +59,7 @@ interface RawOptions {
   logLevel: string;
   tlsCert?: string;
   tlsKey?: string;
+  mtlsCa?: string;
   enablePipeline: boolean;
   maxPipelineTasks: string;
 }
@@ -145,6 +147,12 @@ export function parseArgs(): CLIOptions {
     )
     .addOption(
       new Option("--tls-key <path>", "Path to TLS private key file").env("TLS_KEY"),
+    )
+    .addOption(
+      new Option(
+        "--mtls-ca <path>",
+        "Path to CA certificate for client verification (enables mTLS)",
+      ).env("MTLS_CA"),
     )
     .addOption(
       new Option("-u, --unix <path>", "Unix socket path (overrides port/host)").env(
@@ -248,6 +256,18 @@ export function parseArgs(): CLIOptions {
     }
   }
 
+  const mtlsCa = opts.mtlsCa;
+  if (mtlsCa) {
+    if (!fs.existsSync(mtlsCa)) {
+      logger.fatal({ path: mtlsCa }, "mTLS CA certificate file not found");
+      process.exit(1);
+    }
+    if (!tlsCert || !tlsKey) {
+      logger.fatal("--mtls-ca requires TLS to be enabled (--tls-cert and --tls-key)");
+      process.exit(1);
+    }
+  }
+
   const maxPipelineTasks = parseInt(opts.maxPipelineTasks, 10);
   if (!Number.isInteger(maxPipelineTasks) || maxPipelineTasks <= 0) {
     logger.fatal({ value: opts.maxPipelineTasks }, "Invalid max-pipeline-tasks");
@@ -288,6 +308,7 @@ export function parseArgs(): CLIOptions {
     logLevel,
     tlsCert,
     tlsKey,
+    mtlsCa,
     enablePipeline: opts.enablePipeline,
     maxPipelineTasks,
     s3Config,
