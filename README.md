@@ -1,160 +1,74 @@
 # imaged
 
-A high-performance HTTP server for on-the-fly image processing. Upload an image or provide a URL, and imaged will resize, convert, apply effects, or extract metadata in milliseconds.
+A high-performance HTTP server for on-the-fly and batch image processing. Upload an image or provide a URL, and imaged will resize, convert, apply effects, or extract metadata in milliseconds.
 
 Built with [Bun](https://bun.sh) and powered by [Sharp](https://sharp.pixelplumbing.com/)/[libvips](https://www.libvips.org/) for fast, memory-efficient processing.
 
 ## Features
 
-- **Transform images** — Resize, crop, blur, convert to greyscale, and change formats
-- **Extract metadata** — Dimensions, EXIF data, image statistics, and [thumbhash](https://evanw.github.io/thumbhash/) placeholders
-- **Batch processing** — Process one image into multiple outputs and upload directly to S3 (Bun only)
-- **Wide format support** — AVIF, GIF, HEIC, JPEG, JPEG XL, PNG, SVG, TIFF, and WebP
-- **Production ready** — Configurable concurrency, request limits, TLS, and structured logging
-
-## Installation
-
-### Docker (Recommended)
-
-Pull the latest image from GitHub Container Registry:
-
-```bash
-docker pull ghcr.io/ryanfowler/imaged:latest
-```
-
-Run the server:
-
-```bash
-docker run -p 8000:8000 ghcr.io/ryanfowler/imaged:latest
-```
-
-With custom options:
-
-```bash
-docker run -p 8000:8000 ghcr.io/ryanfowler/imaged:latest \
-  --log-format=json --enable-fetch
-```
-
-Available tags:
-
-- `latest` — Most recent release
-- `0.1.0` — Specific version (see [releases](https://github.com/ryanfowler/imaged/releases))
-- `sha-<commit>` — Specific commit sha
-
-### From Source
-
-Requires [Bun](https://bun.sh) installed:
-
-```bash
-git clone https://github.com/ryanfowler/imaged.git
-cd imaged
-bun install
-bun run index.ts
-```
-
-### Build Docker Image Locally
-
-```bash
-make build    # Build the image
-make run      # Start the server
-```
-
-To pass arguments to the container:
-
-```bash
-make run ARGS="--port=3000"
-```
+- **[Transform images](docs/api/transform.md)** — Resize, crop, blur, convert formats, and apply effects
+- **[Extract metadata](docs/api/metadata.md)** — Dimensions, EXIF data, image statistics, and thumbhash placeholders
+- **[Batch processing](docs/api/pipeline.md)** — Process one image into multiple outputs and upload to S3
+- **[Production ready](docs/configuration.md)** — Configurable concurrency, request limits, TLS, and structured logging
 
 ## Quick Start
 
-The server starts at `http://localhost:8000`. Try it out:
+### Docker
 
 ```bash
-# Resize an image to 400px wide and convert to WebP
+docker pull ghcr.io/ryanfowler/imaged:latest
+docker run -p 8000:8000 ghcr.io/ryanfowler/imaged:latest
+```
+
+### From Source
+
+```bash
+git clone https://github.com/ryanfowler/imaged.git
+cd imaged && bun install
+bun run index.ts
+```
+
+## Try It Out
+
+```bash
+# Resize to 400px wide, convert to WebP
 curl -X PUT "http://localhost:8000/transform?width=400&format=webp" \
   --data-binary @photo.jpg -o thumbnail.webp
 
 # Get image dimensions and EXIF data
 curl -X PUT "http://localhost:8000/metadata?exif=true" \
   --data-binary @photo.jpg
+
+# Apply blur and greyscale
+curl -X PUT "http://localhost:8000/transform?blur=true&greyscale=true" \
+  --data-binary @photo.jpg -o blurred.jpg
 ```
 
-## CLI Options
+## Documentation
 
-| Flag                            | Description                                 | Default     |
-| ------------------------------- | ------------------------------------------- | ----------- |
-| `-p, --port <number>`           | HTTP port to listen on                      | 8000        |
-| `-H, --host <address>`          | HTTP host to bind to                        | -           |
-| `-u, --unix <path>`             | Unix socket path (overrides port/host)      | -           |
-| `-c, --concurrency <number>`    | Max concurrent image operations             | CPU cores   |
-| `-b, --body-limit <bytes>`      | Max request body size in bytes              | 16,777,216  |
-| `-x, --pixel-limit <pixels>`    | Max input image pixels                      | 100,000,000 |
-| `-d, --dimension-limit <px>`    | Max output width/height in pixels           | 16,384      |
-| `-f, --enable-fetch`            | Enable GET endpoints that fetch remote URLs | false       |
-| `-a, --allowed-hosts <regex>`   | Regex pattern for allowed fetch hosts       | -           |
-| `    --disable-ssrf-protection` | Disable SSRF protection for fetch requests  | false       |
-| `-P, --enable-pipeline`         | Enable the /pipeline endpoint (Bun only)    | false       |
-| `    --max-pipeline-tasks <n>`  | Max tasks per pipeline request              | 10          |
-| `-l, --log-format <format>`     | Log format: `json` or `text`                | text        |
-| `-L, --log-level <level>`       | Log level: `debug`, `info`, `warn`, `error` | info        |
-| `    --tls-cert <path>`         | Path to TLS certificate file                | -           |
-| `    --tls-key <path>`          | Path to TLS private key file                | -           |
+### API Reference
 
-## Environment Variables
+- **[Transform](docs/api/transform.md)** — Resize, convert, crop, blur, and apply effects
+- **[Metadata](docs/api/metadata.md)** — Extract dimensions, EXIF, stats, and thumbhash
+- **[Pipeline](docs/api/pipeline.md)** — Batch processing with S3 upload
 
-All CLI options can also be configured via environment variables. CLI flags take precedence over environment variables, which take precedence over defaults.
+### Guides
 
-| Environment Variable      | CLI Equivalent              | Description                                 |
-| ------------------------- | --------------------------- | ------------------------------------------- |
-| `PORT`                    | `--port`                    | HTTP port to listen on                      |
-| `HOST`                    | `--host`                    | HTTP host to bind to                        |
-| `UNIX_SOCKET`             | `--unix`                    | Unix socket path                            |
-| `CONCURRENCY`             | `--concurrency`             | Max concurrent image operations             |
-| `BODY_LIMIT`              | `--body-limit`              | Max request body size in bytes              |
-| `PIXEL_LIMIT`             | `--pixel-limit`             | Max input image pixels                      |
-| `DIMENSION_LIMIT`         | `--dimension-limit`         | Max output width/height in pixels           |
-| `ENABLE_FETCH`            | `--enable-fetch`            | Enable GET endpoints (`true`/`false`)       |
-| `ALLOWED_HOSTS`           | `--allowed-hosts`           | Regex pattern for allowed fetch hosts       |
-| `DISABLE_SSRF_PROTECTION` | `--disable-ssrf-protection` | Disable SSRF protection (`true`/`false`)    |
-| `ENABLE_PIPELINE`         | `--enable-pipeline`         | Enable pipeline endpoint (`true`/`false`)   |
-| `MAX_PIPELINE_TASKS`      | `--max-pipeline-tasks`      | Max tasks per pipeline request              |
-| `LOG_FORMAT`              | `--log-format`              | Log format: `json` or `text`                |
-| `LOG_LEVEL`               | `--log-level`               | Log level: `debug`, `info`, `warn`, `error` |
-| `TLS_CERT`                | `--tls-cert`                | Path to TLS certificate file                |
-| `TLS_KEY`                 | `--tls-key`                 | Path to TLS private key file                |
+- **[Configuration](docs/configuration.md)** — CLI flags, environment variables, TLS setup
+- **[Security](docs/security.md)** — SSRF protection, host allowlists
+- **[Performance](docs/performance.md)** — Memory allocators, libvips tuning
 
-Boolean environment variables accept `true`, `1`, `false`, or `0`.
-
-**Examples:**
-
-```bash
-# Using environment variables
-PORT=3000 ENABLE_FETCH=true bun run index.ts
-
-# CLI flags override environment variables
-PORT=3000 bun run index.ts --port 8080  # Uses port 8080
-
-# Docker with environment variables
-docker run -p 3000:3000 -e PORT=3000 -e ENABLE_FETCH=true ghcr.io/ryanfowler/imaged:latest
-```
-
-## API Reference
-
-### Health Check
-
-```
-GET /healthz
-```
-
-Returns server version and supported formats. Useful for monitoring and capability detection.
+## Health Check
 
 ```bash
 curl http://localhost:8000/healthz
 ```
 
+Which returns general server information like:
+
 ```json
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "runtime": "Bun 1.3.6",
   "sharp": "0.34.5",
   "vips": "8.17.3",
@@ -163,530 +77,19 @@ curl http://localhost:8000/healthz
 }
 ```
 
----
+## Supported Formats
 
-### Transform Image
+The supported formats depends on the libvips that you are using. If you are using the bundled libvips, the supported formats are:
 
-Resize, convert, or apply effects to an image.
+**Input**: AVIF, GIF, JPEG, PNG, SVG, TIFF, WebP
 
-```
-PUT /transform
-GET /transform  (requires --enable-fetch)
-```
+**Output**: AVIF, GIF, JPEG, PNG, RAW, TIFF, WebP
 
-#### Query Parameters
+If using a [globally installed libvips](./docs/performance.md#using-system-libvips), your server _may_ support:
 
-| Parameter     | Type           | Description                                                                     |
-| ------------- | -------------- | ------------------------------------------------------------------------------- |
-| `url`         | string         | Source image URL (GET only)                                                     |
-| `format`      | string         | Output format: `avif`, `gif`, `heic`, `jpeg`, `jxl`, `png`, `tiff`, `webp`      |
-| `width`       | number         | Target width in pixels                                                          |
-| `height`      | number         | Target height in pixels                                                         |
-| `quality`     | number         | Output quality (1-100)                                                          |
-| `effort`      | number         | CPU effort for encoding (AVIF/HEIC: 0-9, GIF/PNG: 1-10, JXL: 1-9, WebP: 0-6)    |
-| `blur`        | boolean/number | Apply blur effect (`true` for fast 3x3 box blur, or sigma value 0.3-1000)       |
-| `greyscale`   | boolean        | Convert to greyscale                                                            |
-| `lossless`    | boolean        | Use lossless compression (where supported)                                      |
-| `progressive` | boolean        | Use progressive encoding (JPEG/PNG)                                             |
-| `fit`         | string         | Resize fit mode: `cover`, `contain`, `fill`, `inside`, `outside`                |
-| `kernel`      | string         | Resize kernel: `nearest`, `linear`, `cubic`, `mitchell`, `lanczos2`, `lanczos3` |
-| `position`    | string         | Crop position when using `cover` fit                                            |
-| `preset`      | string         | Encoding preset: `default`, `quality`, `size`                                   |
-| `strict`      | boolean        | Enable strict validation mode (returns 400 on invalid parameters)               |
+**Input**: AVIF, GIF, HEIC, JPEG, JPEG XL, PDF, PNG, SVG, TIFF, WebP
 
-#### Examples
-
-**Resize an image to 300px width:**
-
-```bash
-curl -X PUT \
-  "http://localhost:8000/transform?width=300" \
-  -H "Content-Type: image/jpeg" \
-  --data-binary @input.jpg \
-  -o output.jpg
-```
-
-**Convert to WebP with 80% quality:**
-
-```bash
-curl -X PUT \
-  "http://localhost:8000/transform?format=webp&quality=80" \
-  -H "Content-Type: image/jpeg" \
-  --data-binary @input.jpg \
-  -o output.webp
-```
-
-**Resize and crop to 200x200 square:**
-
-```bash
-curl -X PUT \
-  "http://localhost:8000/transform?width=200&height=200&fit=cover" \
-  -H "Content-Type: image/jpeg" \
-  --data-binary @input.jpg \
-  -o output.jpg
-```
-
-**Apply greyscale and blur:**
-
-```bash
-curl -X PUT \
-  "http://localhost:8000/transform?greyscale=true&blur=true" \
-  -H "Content-Type: image/jpeg" \
-  --data-binary @input.jpg \
-  -o output.jpg
-```
-
-**Fetch and transform a remote image (requires `--enable-fetch`):**
-
-```bash
-curl "http://localhost:8000/transform?url=https://example.com/image.jpg&width=500&format=webp" \
-  -o output.webp
-```
-
-#### Response Headers
-
-| Header               | Description                                          |
-| -------------------- | ---------------------------------------------------- |
-| `Content-Type`       | MIME type of the output image                        |
-| `X-Image-Width`      | Width of the output image                            |
-| `X-Image-Height`     | Height of the output image                           |
-| `X-Response-Time-Ms` | Processing time in milliseconds                      |
-| `X-Imaged-Warnings`  | Parameter validation warnings (only in lenient mode) |
-
----
-
-### Extract Metadata
-
-Get image dimensions, EXIF data, statistics, or generate a thumbhash placeholder.
-
-```
-PUT /metadata
-GET /metadata  (requires --enable-fetch)
-```
-
-#### Query Parameters
-
-| Parameter   | Type    | Description                                            |
-| ----------- | ------- | ------------------------------------------------------ |
-| `url`       | string  | Source image URL (GET only)                            |
-| `exif`      | boolean | Include EXIF metadata                                  |
-| `stats`     | boolean | Include image statistics                               |
-| `thumbhash` | boolean | Generate thumbhash                                     |
-| `strict`    | boolean | Enable strict validation mode (returns 400 on invalid) |
-
-#### Examples
-
-**Get basic metadata:**
-
-```bash
-curl -X PUT \
-  "http://localhost:8000/metadata" \
-  -H "Content-Type: image/jpeg" \
-  --data-binary @input.jpg
-```
-
-**Response:**
-
-```json
-{
-  "width": 1920,
-  "height": 1080,
-  "format": "jpeg"
-}
-```
-
-**Get metadata with EXIF data:**
-
-```bash
-curl -X PUT \
-  "http://localhost:8000/metadata?exif=true" \
-  -H "Content-Type: image/jpeg" \
-  --data-binary @photo.jpg
-```
-
-**Response:**
-
-```json
-{
-  "width": 4032,
-  "height": 3024,
-  "format": "jpeg",
-  "exif": {
-    "make": "Apple",
-    "model": "iPhone 14 Pro",
-    "datetime": "2024-01-15T10:30:00-05:00",
-    "exposure_time": 0.008,
-    "f_number": 1.78,
-    "focal_length": 6.86,
-    "focal_length_35mm": 24,
-    "iso": 50,
-    "flash": "Did not fire",
-    "exposure_program": "Normal program",
-    "latitude": 37.7749,
-    "longitude": -122.4194,
-    "altitude": 12.5
-  }
-}
-```
-
-EXIF fields include camera info (make, model, lens), capture settings (exposure, aperture, ISO, flash, metering), GPS data (coordinates, altitude, speed, direction), and metadata (description, artist, copyright). Only fields present in the image are returned.
-
-**Generate thumbhash:**
-
-```bash
-curl -X PUT \
-  "http://localhost:8000/metadata?thumbhash=true" \
-  -H "Content-Type: image/jpeg" \
-  --data-binary @input.jpg
-```
-
-**Response:**
-
-```json
-{
-  "width": 1920,
-  "height": 1080,
-  "format": "jpeg",
-  "thumbhash": "3OcRJYB4d3h/iIeHeEh3eIhw+j3A"
-}
-```
-
----
-
-### Pipeline (Batch Processing)
-
-Process a single image into multiple transformed outputs and upload them directly to S3. This endpoint is only available when running on Bun with the `--enable-pipeline` flag and valid AWS credentials.
-
-```
-PUT /pipeline  (requires --enable-pipeline)
-```
-
-#### Request Formats
-
-**JSON with URL fetch** (`Content-Type: application/json`) — requires `--enable-fetch`:
-
-```json
-{
-  "url": "https://example.com/image.jpg",
-  "metadata": { "exif": true, "thumbhash": true },
-  "tasks": [
-    {
-      "id": "thumbnail",
-      "transform": { "format": "webp", "width": 150, "height": 150, "fit": "cover" },
-      "output": { "bucket": "my-bucket", "key": "images/thumb.webp" },
-      "metadata": { "thumbhash": true }
-    },
-    {
-      "id": "full",
-      "transform": { "format": "avif", "quality": 80 },
-      "output": {
-        "bucket": "my-bucket",
-        "key": "images/full.avif",
-        "acl": "public-read"
-      },
-      "metadata": {}
-    }
-  ]
-}
-```
-
-**Multipart form-data** (`Content-Type: multipart/form-data`):
-
-- `config` part: JSON configuration (same structure as above, without `url`)
-- `file` part: Binary image data
-
-#### Task Configuration
-
-Each task in the `tasks` array requires:
-
-| Field                | Type   | Description                                         |
-| -------------------- | ------ | --------------------------------------------------- |
-| `id`                 | string | Unique identifier for the task                      |
-| `transform.format`   | string | Output format (required)                            |
-| `transform.*`        | varies | Any transform option (width, height, quality, etc.) |
-| `output.bucket`      | string | S3 bucket name                                      |
-| `output.key`         | string | S3 object key                                       |
-| `output.acl`         | string | S3 ACL (e.g., `public-read`)                        |
-| `output.contentType` | string | Override auto-detected MIME type                    |
-| `metadata`           | object | Extract metadata from the transformed output        |
-| `metadata.exif`      | bool   | Include EXIF data in output metadata                |
-| `metadata.stats`     | bool   | Include image statistics in output metadata         |
-| `metadata.thumbhash` | bool   | Generate thumbhash for output image                 |
-
-Transform options are the same as the `/transform` endpoint: `format`, `width`, `height`, `quality`, `effort`, `blur`, `greyscale`, `lossless`, `progressive`, `fit`, `kernel`, `position`, `preset`.
-
-#### Metadata Options
-
-The pipeline supports two types of metadata extraction:
-
-- **Global metadata** (`config.metadata`): Extracts metadata from the **source** image before transformation
-- **Per-task metadata** (`task.metadata`): Extracts metadata from each task's **transformed output**
-
-Both can be used together. Providing an empty `metadata` object (e.g., `"metadata": {}`) returns basic metadata (dimensions, format, etc.) without EXIF, stats, or thumbhash.
-
-#### Response
-
-```json
-{
-  "totalDurationMs": 245,
-  "metadata": {
-    "format": "jpeg",
-    "width": 4000,
-    "height": 3000,
-    "thumbhash": "YJeGBwY3d4eId..."
-  },
-  "tasks": [
-    {
-      "id": "thumbnail",
-      "status": "success",
-      "durationMs": 45,
-      "output": {
-        "format": "webp",
-        "width": 150,
-        "height": 150,
-        "size": 8234,
-        "url": "https://my-bucket.s3.us-east-1.amazonaws.com/images/thumb.webp"
-      },
-      "metadata": {
-        "format": "webp",
-        "width": 150,
-        "height": 150,
-        "size": 8234,
-        "thumbhash": "HBkSHYSIeHiP..."
-      }
-    },
-    {
-      "id": "full",
-      "status": "success",
-      "durationMs": 180,
-      "output": {
-        "format": "avif",
-        "width": 4000,
-        "height": 3000,
-        "size": 524288,
-        "url": "https://my-bucket.s3.us-east-1.amazonaws.com/images/full.avif"
-      },
-      "metadata": {
-        "format": "avif",
-        "width": 4000,
-        "height": 3000,
-        "size": 524288
-      }
-    }
-  ]
-}
-```
-
-Failed tasks include an `error` field instead of `output`:
-
-```json
-{
-  "id": "failed-task",
-  "status": "failed",
-  "durationMs": 5,
-  "error": "S3 upload failed: Access Denied"
-}
-```
-
-#### S3 Configuration
-
-The pipeline endpoint requires AWS credentials configured via environment variables:
-
-| Variable                | Required | Default     | Description                                     |
-| ----------------------- | -------- | ----------- | ----------------------------------------------- |
-| `AWS_ACCESS_KEY_ID`     | Yes      | -           | AWS access key                                  |
-| `AWS_SECRET_ACCESS_KEY` | Yes      | -           | AWS secret key                                  |
-| `AWS_REGION`            | No       | `us-east-1` | AWS region                                      |
-| `AWS_ENDPOINT_URL`      | No       | -           | Custom S3 endpoint (for S3-compatible services) |
-
-If `--enable-pipeline` is set but credentials are missing, the server will exit with an error.
-
-#### Examples
-
-**JSON request with URL fetch:**
-
-```bash
-curl -X PUT http://localhost:8000/pipeline \
-  -H "Content-Type: application/json" \
-  -d '{
-    "url": "https://example.com/photo.jpg",
-    "tasks": [
-      {
-        "id": "thumb",
-        "transform": { "format": "webp", "width": 200 },
-        "output": { "bucket": "my-bucket", "key": "thumb.webp" }
-      }
-    ]
-  }'
-```
-
-**Multipart request with file upload:**
-
-```bash
-curl -X PUT http://localhost:8000/pipeline \
-  -F 'config={"tasks":[{"id":"t1","transform":{"format":"webp","width":300},"output":{"bucket":"my-bucket","key":"out.webp"}}]}' \
-  -F 'file=@photo.jpg'
-```
-
-**Start the server with pipeline enabled:**
-
-```bash
-AWS_ACCESS_KEY_ID=your-key \
-AWS_SECRET_ACCESS_KEY=your-secret \
-AWS_REGION=us-west-2 \
-bun run index.ts --enable-pipeline --enable-fetch
-```
-
-**Using with S3-compatible services (e.g., DigitalOcean Spaces, LocalStack):**
-
-```bash
-AWS_ACCESS_KEY_ID=your-key \
-AWS_SECRET_ACCESS_KEY=your-secret \
-AWS_ENDPOINT_URL=https://nyc3.digitaloceanspaces.com \
-bun run index.ts --enable-pipeline
-```
-
-## Parameter Validation
-
-imaged validates all query parameters and provides two validation modes:
-
-### Lenient Mode (Default)
-
-Invalid parameters are handled gracefully without failing the request:
-
-- **Out-of-range values are clamped** — `quality=200` becomes `100`, `width=99999` becomes the dimension limit
-- **Invalid values are ignored** — `blur=abc` applies no blur, `format=bmp` falls back to JPEG
-- **Unknown parameters are ignored** — Extra parameters don't cause errors
-- **Warnings are returned** — The `X-Imaged-Warnings` header contains details about any adjustments
-
-```bash
-# Request with out-of-range quality
-curl -v -X PUT "http://localhost:8000/transform?quality=200" \
-  --data-binary @input.jpg -o output.jpg
-
-# Response includes warning header:
-# X-Imaged-Warnings: quality: must be at most 100
-```
-
-### Strict Mode
-
-Enable strict validation with `strict=true` to return 400 Bad Request for any invalid parameter:
-
-```bash
-# Strict mode rejects invalid parameters
-curl -X PUT "http://localhost:8000/transform?quality=abc&strict=true" \
-  --data-binary @input.jpg
-
-# Returns 400 Bad Request:
-# Invalid parameters:
-# - quality: must be a positive integer (got "abc")
-```
-
-**Error formats:**
-
-- `/transform` endpoint returns plain text errors
-- `/metadata` endpoint returns JSON errors:
-
-```json
-{
-  "error": "Invalid parameters",
-  "details": [
-    { "param": "exif", "value": "maybe", "reason": "must be true, false, 1, or 0" }
-  ]
-}
-```
-
-Use strict mode during development to catch parameter errors early, or in production when you want explicit failures instead of silent corrections.
-
-## TLS
-
-Enable HTTPS by providing a certificate and private key:
-
-```bash
-bun run index.ts --tls-cert cert.pem --tls-key key.pem
-```
-
-## Security
-
-### SSRF Protection
-
-When using `--enable-fetch` to allow fetching remote images, imaged includes Server-Side Request Forgery (SSRF) protection that is **enabled by default**. This prevents attackers from using imaged to make requests to internal services.
-
-**Protected IP ranges:**
-
-- **IPv4**: Loopback (127.0.0.0/8), private networks (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16), link-local (169.254.0.0/16), multicast (224.0.0.0/4), and reserved ranges
-- **IPv6**: Loopback (::1), unspecified (::), link-local (fe80::/10), unique local (fc00::/7), multicast (ff00::/8), and IPv4-mapped addresses
-
-**Redirect validation:** SSRF protection validates each redirect hop, preventing attacks where an allowed host redirects to an internal IP.
-
-**To disable** (not recommended for production):
-
-```bash
-bun run index.ts --enable-fetch --disable-ssrf-protection
-```
-
-### Host Allowlist
-
-Use `--allowed-hosts` with a regex pattern to restrict which hosts can be fetched:
-
-```bash
-# Only allow images from example.com
-bun run index.ts --enable-fetch --allowed-hosts '^example\.com$'
-
-# Allow multiple domains
-bun run index.ts --enable-fetch --allowed-hosts '^(images\.example\.com|cdn\.example\.com)$'
-```
-
-The allowlist is validated on both initial requests and redirects.
-
-## Performance
-
-Image processing is memory-intensive. For production deployments, use a high-performance allocator like [mimalloc](https://github.com/microsoft/mimalloc) or [jemalloc](https://github.com/jemalloc/jemalloc) to reduce memory fragmentation and improve throughput.
-
-**macOS:**
-
-```bash
-brew install mimalloc
-DYLD_INSERT_LIBRARIES=/opt/homebrew/lib/libmimalloc.dylib bun run index.ts
-```
-
-**Linux (Debian/Ubuntu):**
-
-```bash
-sudo apt install libmimalloc2
-LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libmimalloc.so bun run index.ts
-```
-
-**Linux (Alpine):**
-
-```bash
-apk add mimalloc
-LD_PRELOAD=/usr/lib/libmimalloc.so bun run index.ts
-```
-
-If using [mimalloc](https://github.com/microsoft/mimalloc), you may want to investigate the following environment variables for your use case:
-
-- `MIMALLOC_ALLOW_LARGE_OS_PAGES`
-- `MIMALLOC_SEGMENT_CACHE`
-- `MIMALLOC_PAGE_RESET`
-- `MIMALLOC_PURGE_DELAY`
-
-For libvips, you may be interested in the following environment variables:
-
-- `VIPS_DISC_THRESHOLD`
-- `VIPS_CONCURRENCY` (default of `1` used in imaged)
-
-## Using System libvips
-
-By default, Sharp bundles its own libvips. To use a system-installed version instead (useful for custom builds or additional format support):
-
-```bash
-rm -rf node_modules
-SHARP_FORCE_GLOBAL_LIBVIPS=1 \
-  BUN_FEATURE_FLAG_DISABLE_NATIVE_DEPENDENCY_LINKER=1 \
-  BUN_FEATURE_FLAG_DISABLE_IGNORE_SCRIPTS=1 \
-  bun install
-```
+**Output**: AVIF, GIF, HEIC, JPEG, JPEG XL, PNG, RAW, TIFF, WebP
 
 ## License
 
