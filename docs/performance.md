@@ -109,7 +109,7 @@ SHARP_FORCE_GLOBAL_LIBVIPS=1 \
 
 **When to use system libvips:**
 
-- Need formats not in the bundled version (e.g., newer HEIC support)
+- Need formats not in the bundled version (e.g. HEIC support)
 - Want to use OS security updates for libvips
 - Building custom libvips with specific plugins
 

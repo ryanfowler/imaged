@@ -5,20 +5,20 @@ Process a single image into multiple transformed outputs and upload them directl
 ## Requirements
 
 - **Runtime**: Bun only (not supported on Node.js)
-- **Flag**: `--enable-pipeline` must be set
-- **Credentials**: AWS credentials must be configured
+- **Opt-In**: The `--enable-pipeline` flag or `ENABLE_PIPELINE=1` environment variable must be set
+- **Credentials**: AWS credentials must be configured (`AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`)
 
 ## Endpoint
 
 ```
-PUT /pipeline  (requires --enable-pipeline)
+PUT /pipeline  (requires "fetch" to be enabled)
 ```
 
 ## Request Formats
 
 ### JSON with URL Fetch
 
-Requires `--enable-fetch` to be enabled.
+Requires `--enable-fetch` flag or `ENABLE_FETCH=1` environment variable.
 
 ```http
 PUT /pipeline
@@ -46,7 +46,7 @@ Content-Type: application/json
 
 ### Multipart Form Data
 
-Upload image directly without requiring `--enable-fetch`:
+Upload image directly:
 
 ```http
 PUT /pipeline
@@ -233,15 +233,6 @@ Use `AWS_ENDPOINT_URL` for S3-compatible services:
 AWS_ACCESS_KEY_ID=your-key \
 AWS_SECRET_ACCESS_KEY=your-secret \
 AWS_ENDPOINT_URL=https://nyc3.digitaloceanspaces.com \
-bun run index.ts --enable-pipeline
-```
-
-**MinIO / LocalStack:**
-
-```bash
-AWS_ACCESS_KEY_ID=minioadmin \
-AWS_SECRET_ACCESS_KEY=minioadmin \
-AWS_ENDPOINT_URL=http://localhost:9000 \
 bun run index.ts --enable-pipeline
 ```
 

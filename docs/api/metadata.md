@@ -6,11 +6,11 @@ Extract image dimensions, EXIF data, statistics, and generate thumbhash placehol
 
 ```
 PUT /metadata
-GET /metadata  (requires --enable-fetch)
+GET /metadata  (requires "fetch" to be enabled)
 ```
 
 - **PUT**: Upload image in request body
-- **GET**: Fetch image from URL (requires `--enable-fetch` flag)
+- **GET**: Fetch image from URL (requires `--enable-fetch` flag or `ENABLE_FETCH=1` environment variable)
 
 ## Query Parameters
 
