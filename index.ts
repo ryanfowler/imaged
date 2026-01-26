@@ -46,6 +46,10 @@ const url = await server.serve({
   enableFetch: opts.enableFetch,
   tlsCert: opts.tlsCert,
   tlsKey: opts.tlsKey,
+  mtlsCa: opts.mtlsCa,
   pipelineExecutor,
 });
-logger.info({ url }, "server listening");
+logger.info(
+  { tls: !!opts.tlsCert && !!opts.tlsKey, mtls: !!opts.mtlsCa, url },
+  "server listening",
+);
