@@ -1,5 +1,6 @@
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect, spyOn } from "bun:test";
 import { Client } from "./fetch.ts";
+import * as ssrf from "./ssrf.ts";
 
 describe("Client with SSRF protection", () => {
   test("blocks request to localhost", async () => {
@@ -151,5 +152,123 @@ describe("Client allowedHosts", () => {
     // example.com may return 404 or other response
     const result = client.fetch("http://example.com/image.png");
     await expect(result).rejects.not.toThrow(/host is not allowed/);
+  });
+});
+
+describe("DNS rebinding protection", () => {
+  test("resolves DNS once and connects to validated IP", async () => {
+    // Track how many times resolveHostname is called
+    const resolveHostnameSpy = spyOn(ssrf, "resolveHostname");
+
+    const client = new Client({
+      timeoutMs: 5000,
+      bodyLimit: 1024 * 1024,
+      ssrfProtection: true,
+    });
+
+    // This will fail because localhost resolves to a private IP
+    await expect(client.fetch("http://localhost/")).rejects.toThrow(/private IP/);
+
+    // resolveHostname should only be called once
+    expect(resolveHostnameSpy).toHaveBeenCalledTimes(1);
+    expect(resolveHostnameSpy).toHaveBeenCalledWith("localhost");
+
+    resolveHostnameSpy.mockRestore();
+  });
+
+  test("blocks hostname that resolves to private IP after DNS lookup", async () => {
+    // Mock resolveHostname to return a private IP for a "safe looking" hostname
+    const resolveHostnameMock = spyOn(ssrf, "resolveHostname").mockResolvedValue([
+      "127.0.0.1",
+    ]);
+
+    const client = new Client({
+      timeoutMs: 5000,
+      bodyLimit: 1024 * 1024,
+      ssrfProtection: true,
+    });
+
+    // Even though the hostname looks safe, it resolves to a private IP
+    await expect(client.fetch("http://safe-looking-host.com/")).rejects.toThrow(
+      /private IP/,
+    );
+
+    resolveHostnameMock.mockRestore();
+  });
+
+  test("uses first public IP when multiple IPs resolved", async () => {
+    // Mock to return mixed IPs - private first, then public
+    const resolveHostnameMock = spyOn(ssrf, "resolveHostname").mockResolvedValue([
+      "127.0.0.1", // private - should be skipped
+      "10.0.0.1", // private - should be skipped
+      "8.8.8.8", // public - should be used
+    ]);
+
+    const client = new Client({
+      timeoutMs: 1000, // Short timeout - we just want to verify no SSRF error
+      bodyLimit: 1024 * 1024,
+      ssrfProtection: true,
+    });
+
+    // Should succeed past SSRF check and fail with connection error
+    // (because 8.8.8.8 doesn't serve HTTP on port 80)
+    // The important thing is it doesn't throw "private IP" error
+    const result = client.fetch("http://example.com/");
+    await expect(result).rejects.not.toThrow(/private IP/);
+
+    resolveHostnameMock.mockRestore();
+  });
+
+  test("blocks when all resolved IPs are private", async () => {
+    // Mock to return only private IPs
+    const resolveHostnameMock = spyOn(ssrf, "resolveHostname").mockResolvedValue([
+      "127.0.0.1",
+      "10.0.0.1",
+      "192.168.1.1",
+    ]);
+
+    const client = new Client({
+      timeoutMs: 5000,
+      bodyLimit: 1024 * 1024,
+      ssrfProtection: true,
+    });
+
+    await expect(client.fetch("http://example.com/")).rejects.toThrow(/private IP/);
+
+    resolveHostnameMock.mockRestore();
+  });
+
+  test("validates redirect destinations for DNS rebinding", async () => {
+    // Start a simple server that redirects
+    const server = Bun.serve({
+      port: 0,
+      fetch(req) {
+        const url = new URL(req.url);
+        if (url.pathname === "/redirect") {
+          // Redirect to localhost (should be blocked)
+          return new Response(null, {
+            status: 302,
+            headers: { Location: "http://127.0.0.1/target" },
+          });
+        }
+        return new Response("OK");
+      },
+    });
+
+    try {
+      const client = new Client({
+        timeoutMs: 5000,
+        bodyLimit: 1024 * 1024,
+        ssrfProtection: true,
+      });
+
+      // Request to the server's redirect endpoint
+      // The redirect target (127.0.0.1) should be blocked
+      await expect(
+        client.fetch(`http://127.0.0.1:${server.port}/redirect`),
+      ).rejects.toThrow(/private IP/);
+    } finally {
+      server.stop();
+    }
   });
 });
