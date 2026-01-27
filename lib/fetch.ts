@@ -206,7 +206,9 @@ export class Client {
       throw new HttpError(400, "fetch: only http and https URLs are supported");
     }
 
-    // Check allowed hosts regex
+    // Check allowed hosts regex.
+    // Note: parsed.host is limited to 253 chars by DNS spec, providing
+    // defense-in-depth against ReDoS even if a problematic pattern slips through.
     if (this.allowedHosts && !this.allowedHosts.test(parsed.host)) {
       throw new HttpError(403, "fetch: host is not allowed");
     }

@@ -23,6 +23,26 @@ export function parseBool(value: string): boolean {
   return true;
 }
 
+/**
+ * Detects regex patterns vulnerable to catastrophic backtracking (ReDoS).
+ * Checks for nested quantifiers and quantified groups that can cause
+ * exponential time complexity.
+ *
+ * Note: Hostnames are limited to 253 chars by DNS spec, providing defense-in-depth.
+ */
+export function hasReDoSRisk(pattern: string): boolean {
+  // Detect nested quantifiers: (...)+ where the group contains +, *, or {n,}
+  // Examples: (a+)+, (a*)+, (a+)*, (a{2,})+
+  const nestedQuantifier =
+    /\([^)]*(?:[+*]|\{\d*,\d*\})\)[+*?]|\([^)]*(?:[+*]|\{\d*,\d*\})\)\{/;
+
+  // Detect quantified groups followed by quantifiers
+  // Examples: (a|b)+c+, groups with overlapping matches
+  const quantifiedGroup = /\)[+*?]\s*[^)]*[+*]/;
+
+  return nestedQuantifier.test(pattern) || quantifiedGroup.test(pattern);
+}
+
 export interface CLIOptions {
   port: number;
   host?: string;
@@ -211,6 +231,13 @@ export function parseArgs(): CLIOptions {
 
   let allowedHosts: RegExp | undefined;
   if (opts.allowedHosts) {
+    if (hasReDoSRisk(opts.allowedHosts)) {
+      logger.fatal(
+        { value: opts.allowedHosts },
+        "Invalid allowed-hosts regex: pattern may cause catastrophic backtracking",
+      );
+      process.exit(1);
+    }
     try {
       allowedHosts = new RegExp(opts.allowedHosts);
     } catch {
