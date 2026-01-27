@@ -1,4 +1,4 @@
-import { validateUrlForSSRF } from "./ssrf.ts";
+import { resolveHostname, isPrivateIP, parseIPv4, parseIPv6 } from "./ssrf.ts";
 import { HttpError } from "./types.ts";
 
 type ReadResult<T> = { done: false; value: T } | { done: true; value?: T };
@@ -64,9 +64,6 @@ export class Client {
     let redirectCount = 0;
 
     while (true) {
-      // Validate host before each request (initial + redirects)
-      await this.validateHost(currentUrl);
-
       const res = await this.makeRequest(currentUrl);
 
       // Check for redirect responses
@@ -107,18 +104,95 @@ export class Client {
   }
 
   // Performs a single HTTP request with timeout and manual redirect handling.
+  // DNS resolution and SSRF validation are done atomically to prevent DNS rebinding.
   private async makeRequest(url: string): Promise<Response> {
+    const parsed = this.validateUrl(url);
+
+    // Resolve hostname to IP and validate for SSRF in one atomic step.
+    // The request is then made directly to the validated IP.
+    const { targetUrl, host } = await this.resolveAndValidate(parsed);
+
     let res: Response;
     try {
-      res = await fetch(url, {
+      res = await fetch(targetUrl, {
         signal: AbortSignal.timeout(this.timeoutMs),
         redirect: "manual",
+        headers: {
+          Host: host,
+        },
       });
     } catch {
       throw new HttpError(400, "fetch: unable to make request");
     }
 
     return res;
+  }
+
+  // Resolves hostname to IP and validates it for SSRF.
+  // Returns a URL with the IP address and the original host for the Host header.
+  // This ensures DNS resolution and validation happen atomically - no TOCTTOU.
+  private async resolveAndValidate(
+    parsed: URL,
+  ): Promise<{ targetUrl: string; host: string }> {
+    const hostname = parsed.hostname;
+
+    // If SSRF protection is disabled, just return the original URL
+    if (!this.ssrfProtection) {
+      return { targetUrl: parsed.toString(), host: parsed.host };
+    }
+
+    // Check if hostname is already an IP address
+    const isIPv4 = parseIPv4(hostname) !== null;
+    const cleanedHostname = hostname.replace(/^\[|\]$/g, "");
+    const isIPv6 = parseIPv6(cleanedHostname) !== null;
+
+    if (isIPv4 || isIPv6) {
+      // Direct IP address - validate it
+      const ip = isIPv6 ? cleanedHostname : hostname;
+      const result = isPrivateIP(ip);
+      if (result.isPrivate) {
+        throw new HttpError(
+          403,
+          `fetch: host resolves to private IP (${result.reason})`,
+        );
+      }
+      return { targetUrl: parsed.toString(), host: parsed.host };
+    }
+
+    // Resolve hostname to IP addresses
+    const ips = await resolveHostname(hostname);
+
+    // Find the first non-private IP
+    for (const ip of ips) {
+      const result = isPrivateIP(ip);
+      if (!result.isPrivate) {
+        // Build URL with IP address instead of hostname
+        const targetUrl = this.buildUrlWithIP(parsed, ip);
+        return { targetUrl, host: parsed.host };
+      }
+    }
+
+    // All IPs are private
+    throw new HttpError(403, "fetch: host resolves to private IP");
+  }
+
+  // Builds a URL replacing the hostname with an IP address.
+  private buildUrlWithIP(original: URL, ip: string): string {
+    // Handle IPv6 addresses - they need brackets in URLs
+    const hostPart = ip.includes(":") ? `[${ip}]` : ip;
+
+    // Reconstruct URL with IP
+    let url = `${original.protocol}//${hostPart}`;
+
+    // Add port if non-default
+    if (original.port) {
+      url += `:${original.port}`;
+    }
+
+    // Add path, search, and hash
+    url += original.pathname + original.search + original.hash;
+
+    return url;
   }
 
   // Reads the response body into a pre-allocated buffer when Content-Length is known.
@@ -193,7 +267,8 @@ export class Client {
     );
   }
 
-  private async validateHost(url: string): Promise<void> {
+  // Validates URL scheme and allowed hosts (does not do SSRF IP validation).
+  private validateUrl(url: string): URL {
     let parsed: URL;
     try {
       parsed = new URL(url);
@@ -211,10 +286,7 @@ export class Client {
       throw new HttpError(403, "fetch: host is not allowed");
     }
 
-    // SSRF protection: validate IP addresses
-    if (this.ssrfProtection) {
-      await validateUrlForSSRF(parsed);
-    }
+    return parsed;
   }
 }
 
