@@ -18,7 +18,7 @@
     "@fastify/multipart": "9.4.0",
     "commander": "14.0.2",
     "exif-reader": "2.0.3",
-    "fastify": "5.7.2",
+    "fastify": "5.7.3",
     "pino": "10.3.0",
     "sharp": "0.34.5",
     "thumbhash": "0.1.1"
