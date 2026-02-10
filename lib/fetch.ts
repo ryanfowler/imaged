@@ -64,7 +64,10 @@ export class Client {
     let redirectCount = 0;
 
     while (true) {
-      // Validate host before each request (initial + redirects)
+      // Validate host before each request (initial + redirects).
+      // Note: There is a TOCTOU window between validateHost and makeRequest
+      // where DNS could resolve to a different IP (DNS rebinding). Fully fixing
+      // this requires IP-pinning at the socket level, which is complex with TLS.
       await this.validateHost(currentUrl);
 
       const res = await this.makeRequest(currentUrl);
@@ -72,7 +75,7 @@ export class Client {
       // Check for redirect responses
       if (res.status >= 300 && res.status < 400) {
         if (redirectCount >= MAX_REDIRECTS) {
-          throw new HttpError(400, "fetch: too many redirects");
+          throw new HttpError(502, "fetch: too many redirects");
         }
 
         const location = res.headers.get("location");
@@ -99,7 +102,7 @@ export class Client {
         throw new HttpError(502, `fetch: received status ${res.status}`);
       }
       if (!res.body) {
-        throw new HttpError(400, "fetch: no body in response");
+        throw new HttpError(502, "fetch: no body in response");
       }
 
       return res;
@@ -115,7 +118,7 @@ export class Client {
         redirect: "manual",
       });
     } catch {
-      throw new HttpError(400, "fetch: unable to make request");
+      throw new HttpError(502, "fetch: unable to make request");
     }
 
     return res;

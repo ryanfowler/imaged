@@ -52,7 +52,7 @@ export async function uploadToS3(
 ): Promise<void> {
   const file = client.file(key, {
     bucket,
-    acl: options.acl as undefined, // Hack the type system
+    ...(options.acl != null && { acl: options.acl as "private" }),
     type: options.contentType,
   });
 

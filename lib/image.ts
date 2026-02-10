@@ -166,8 +166,8 @@ export class ImageEngine {
 
     return {
       format: input,
-      width: meta.autoOrient?.width || meta.width,
-      height: meta.autoOrient?.height || meta.height,
+      width: meta.autoOrient?.width ?? meta.width,
+      height: meta.autoOrient?.height ?? meta.height,
       size: ops.data.length,
       space: meta.space,
       channels: meta.channels,
@@ -198,8 +198,8 @@ function applyFormat(img: sharp.Sharp, ops: ImageOptions): sharp.Sharp {
   switch (ops.format) {
     case ImageType.Avif:
       return img.avif({
-        quality: ops.quality || preset.quality,
-        effort: ops.effort || preset.effort,
+        quality: ops.quality ?? preset.quality,
+        effort: ops.effort ?? preset.effort,
         chromaSubsampling: preset.chromaSubsampling,
         lossless: ops.lossless,
       });
@@ -208,23 +208,23 @@ function applyFormat(img: sharp.Sharp, ops: ImageOptions): sharp.Sharp {
     case ImageType.Heic:
       return img.heif({
         compression: "hevc",
-        quality: ops.quality || preset.quality,
-        effort: ops.effort || preset.effort,
+        quality: ops.quality ?? preset.quality,
+        effort: ops.effort ?? preset.effort,
         chromaSubsampling: preset.chromaSubsampling,
         lossless: ops.lossless,
       });
     case ImageType.Jpeg:
       return img.jpeg({
-        quality: ops.quality || preset.quality,
-        progressive: ops.progressive || preset.progressive,
+        quality: ops.quality ?? preset.quality,
+        progressive: ops.progressive ?? preset.progressive,
         chromaSubsampling: preset.chromaSubsampling,
         mozjpeg: preset.mozjpeg,
         optimiseCoding: preset.optimiseCoding,
       });
     case ImageType.JpegXL:
       return img.jxl({
-        quality: ops.quality || preset.quality,
-        effort: ops.effort || preset.effort,
+        quality: ops.quality ?? preset.quality,
+        effort: ops.effort ?? preset.effort,
         decodingTier: preset.decodingTier,
         lossless: ops.lossless,
       });
@@ -245,15 +245,15 @@ function applyFormat(img: sharp.Sharp, ops: ImageOptions): sharp.Sharp {
       throw new HttpError(400, "image: encoding type svg is not supported");
     case ImageType.Tiff:
       return img.tiff({
-        quality: ops.quality || preset.quality,
+        quality: ops.quality ?? preset.quality,
         compression: preset.compression,
         predictor: preset.predictor,
       });
     case ImageType.Webp:
       return img.webp({
-        quality: ops.quality || preset.quality,
+        quality: ops.quality ?? preset.quality,
         lossless: ops.lossless,
-        effort: ops.effort || preset.effort,
+        effort: ops.effort ?? preset.effort,
         smartSubsample: preset.smartSubsample,
         smartDeblock: preset.smartDeblock,
         alphaQuality: preset.alphaQuality,
@@ -316,21 +316,6 @@ export function detectImageFormat(buf: Uint8Array): ImageType {
     return ImageType.Tiff;
   }
 
-  // BMP
-  // if (buf[0] === 0x42 && buf[1] === 0x4d) {
-  //   return ImageType.Bmp;
-  // }
-
-  // ICO
-  // if (buf[0] === 0x00 && buf[1] === 0x00 && buf[2] === 0x01 && buf[3] === 0x00) {
-  //   return ImageType.Ico;
-  // }
-
-  // PSD
-  // if (buf[0] === 0x38 && buf[1] === 0x42 && buf[2] === 0x50 && buf[3] === 0x53) {
-  //   return ImageType.Psd;
-  // }
-
   // JPEG XL
   if (
     (buf[0] === 0xff && buf[1] === 0x0a) ||
@@ -358,8 +343,6 @@ export function detectImageFormat(buf: Uint8Array): ImageType {
     if (brand.startsWith("heic")) return ImageType.Heic;
     if (brand.startsWith("heix")) return ImageType.Heic;
     if (brand.startsWith("hevc")) return ImageType.Heic;
-    // if (brand.startsWith("heif")) return ImageType.HEIF;
-    // if (brand.startsWith("mif1")) return ImageType.HEIF;
   }
 
   // PDF

@@ -400,6 +400,18 @@ describe("ImageEngine", () => {
       ).rejects.toThrow(/encoding type svg is not supported/);
     });
 
+    test("honors effort: 0 for WebP", async () => {
+      // effort: 0 is valid for WebP (range 0-6), must not be replaced by preset default
+      const result = await engine.perform({
+        data: jpegBuffer,
+        format: ImageType.Webp,
+        effort: 0,
+      });
+
+      expect(result.format).toBe(ImageType.Webp);
+      expect(detectImageFormat(result.data)).toBe(ImageType.Webp);
+    });
+
     test("handles lossless WebP", async () => {
       const result = await engine.perform({
         data: pngBuffer,
