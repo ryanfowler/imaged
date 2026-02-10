@@ -13,6 +13,7 @@ import {
 } from "./types.ts";
 import {
   getMimetype,
+  validateContentType,
   validateBlurStrict,
   validateBooleanStrict,
   validateDimensionStrict,
@@ -229,7 +230,9 @@ export class PipelineExecutor {
       });
 
       // Upload to S3
-      const contentType = task.output.contentType || getMimetype(result.format);
+      const contentType = task.output.contentType
+        ? validateContentType(task.output.contentType, `task '${task.id}'`)
+        : getMimetype(result.format);
       await uploadToS3(
         result.data,
         task.output.bucket,

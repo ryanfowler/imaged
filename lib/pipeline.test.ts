@@ -1,7 +1,7 @@
 import { describe, test, expect, mock } from "bun:test";
 import { PipelineExecutor } from "./pipeline.ts";
 import { HttpError, type PipelineConfig, type S3Config, ImageType } from "./types.ts";
-import { getMimetype } from "./validation.ts";
+import { getMimetype, validateContentType } from "./validation.ts";
 
 // Mock S3 config for testing
 const mockS3Config: S3Config = {
@@ -69,6 +69,48 @@ describe("getMimetype", () => {
 
   test("returns correct mimetype for webp", () => {
     expect(getMimetype("webp")).toBe("image/webp");
+  });
+});
+
+describe("validateContentType", () => {
+  test("accepts image/jpeg", () => {
+    expect(validateContentType("image/jpeg", "test")).toBe("image/jpeg");
+  });
+
+  test("accepts image/png", () => {
+    expect(validateContentType("image/png", "test")).toBe("image/png");
+  });
+
+  test("accepts image/webp", () => {
+    expect(validateContentType("image/webp", "test")).toBe("image/webp");
+  });
+
+  test("accepts application/pdf", () => {
+    expect(validateContentType("application/pdf", "test")).toBe("application/pdf");
+  });
+
+  test("accepts application/octet-stream", () => {
+    expect(validateContentType("application/octet-stream", "test")).toBe(
+      "application/octet-stream",
+    );
+  });
+
+  test("rejects text/html", () => {
+    expect(() => validateContentType("text/html", "test")).toThrow(
+      "content type 'text/html' is not allowed",
+    );
+  });
+
+  test("rejects text/javascript", () => {
+    expect(() => validateContentType("text/javascript", "test")).toThrow(
+      "content type 'text/javascript' is not allowed",
+    );
+  });
+
+  test("rejects arbitrary content type", () => {
+    expect(() => validateContentType("application/json", "test")).toThrow(
+      "content type 'application/json' is not allowed",
+    );
   });
 });
 

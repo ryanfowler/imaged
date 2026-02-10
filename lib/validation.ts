@@ -99,6 +99,30 @@ export function normalizeFormat(value: string): string {
   return v;
 }
 
+// Allowed content types for S3 uploads
+const ALLOWED_CONTENT_TYPES = new Set([
+  "image/avif",
+  "image/gif",
+  "image/heic",
+  "image/jpeg",
+  "image/jxl",
+  "image/png",
+  "image/svg+xml",
+  "image/tiff",
+  "image/webp",
+  "application/pdf",
+  "application/octet-stream",
+]);
+
+// Validate that a content type is an allowed image MIME type.
+// Returns the validated content type, or throws HttpError for disallowed types.
+export function validateContentType(contentType: string, prefix: string): string {
+  if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
+    throw new HttpError(400, `${prefix}: content type '${contentType}' is not allowed`);
+  }
+  return contentType;
+}
+
 // Get mime type for image format
 export function getMimetype(format: ImageType): string {
   switch (format) {
