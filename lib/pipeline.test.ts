@@ -642,6 +642,262 @@ describe("PipelineExecutor", () => {
     });
   });
 
+  describe("validation - error message prefixes", () => {
+    test("error for invalid width includes full task prefix", async () => {
+      const engine = createMockEngine();
+      const client = createMockClient();
+      const executor = new PipelineExecutor(
+        engine as never,
+        client as never,
+        mockS3Config,
+        {
+          maxTasks: 10,
+          enableFetch: false,
+          dimensionLimit: DEFAULT_DIMENSION_LIMIT,
+        },
+      );
+
+      const config = createValidConfig({
+        tasks: [
+          {
+            id: "t1",
+            transform: { format: ImageType.Jpeg, width: -10 },
+            output: { bucket: "b", key: "k" },
+          },
+        ],
+      });
+
+      try {
+        await executor.execute(config, new Uint8Array([1, 2, 3]));
+        expect(true).toBe(false);
+      } catch (e) {
+        expect(e).toBeInstanceOf(HttpError);
+        const err = e as HttpError;
+        expect(err.body).toBe("task[0].transform.width: must be at least 1");
+      }
+    });
+
+    test("error for invalid format includes full task prefix", async () => {
+      const engine = createMockEngine();
+      const client = createMockClient();
+      const executor = new PipelineExecutor(
+        engine as never,
+        client as never,
+        mockS3Config,
+        {
+          maxTasks: 10,
+          enableFetch: false,
+          dimensionLimit: DEFAULT_DIMENSION_LIMIT,
+        },
+      );
+
+      const config = {
+        tasks: [
+          {
+            id: "t1",
+            transform: { format: "bmp" },
+            output: { bucket: "b", key: "k" },
+          },
+        ],
+      } as unknown as PipelineConfig;
+
+      try {
+        await executor.execute(config, new Uint8Array([1, 2, 3]));
+        expect(true).toBe(false);
+      } catch (e) {
+        expect(e).toBeInstanceOf(HttpError);
+        const err = e as HttpError;
+        expect(String(err.body)).toContain("task[0].transform.format:");
+        expect(String(err.body)).toContain("unknown format 'bmp'");
+      }
+    });
+
+    test("error for second task uses correct index", async () => {
+      const engine = createMockEngine();
+      const client = createMockClient();
+      const executor = new PipelineExecutor(
+        engine as never,
+        client as never,
+        mockS3Config,
+        {
+          maxTasks: 10,
+          enableFetch: false,
+          dimensionLimit: DEFAULT_DIMENSION_LIMIT,
+        },
+      );
+
+      const config = createValidConfig({
+        tasks: [
+          {
+            id: "t1",
+            transform: { format: ImageType.Jpeg },
+            output: { bucket: "b", key: "k1" },
+          },
+          {
+            id: "t2",
+            transform: { format: ImageType.Jpeg, quality: 200 },
+            output: { bucket: "b", key: "k2" },
+          },
+        ],
+      });
+
+      try {
+        await executor.execute(config, new Uint8Array([1, 2, 3]));
+        expect(true).toBe(false);
+      } catch (e) {
+        expect(e).toBeInstanceOf(HttpError);
+        const err = e as HttpError;
+        expect(err.body).toBe("task[1].transform.quality: must be at most 100");
+      }
+    });
+
+    test("error for invalid effort includes format in message", async () => {
+      const engine = createMockEngine();
+      const client = createMockClient();
+      const executor = new PipelineExecutor(
+        engine as never,
+        client as never,
+        mockS3Config,
+        {
+          maxTasks: 10,
+          enableFetch: false,
+          dimensionLimit: DEFAULT_DIMENSION_LIMIT,
+        },
+      );
+
+      const config = createValidConfig({
+        tasks: [
+          {
+            id: "t1",
+            transform: { format: ImageType.Webp, effort: 10 },
+            output: { bucket: "b", key: "k" },
+          },
+        ],
+      });
+
+      try {
+        await executor.execute(config, new Uint8Array([1, 2, 3]));
+        expect(true).toBe(false);
+      } catch (e) {
+        expect(e).toBeInstanceOf(HttpError);
+        const err = e as HttpError;
+        expect(err.body).toBe("task[0].transform.effort: must be at most 6 for webp");
+      }
+    });
+  });
+
+  describe("validation - metadata options", () => {
+    test("throws error for invalid metadata exif value", async () => {
+      const engine = createMockEngine();
+      const client = createMockClient();
+      const executor = new PipelineExecutor(
+        engine as never,
+        client as never,
+        mockS3Config,
+        {
+          maxTasks: 10,
+          enableFetch: false,
+          dimensionLimit: DEFAULT_DIMENSION_LIMIT,
+        },
+      );
+
+      const config = {
+        tasks: [
+          {
+            id: "t1",
+            transform: { format: ImageType.Jpeg },
+            output: { bucket: "b", key: "k" },
+            metadata: { exif: "invalid" },
+          },
+        ],
+      } as unknown as PipelineConfig;
+
+      try {
+        await executor.execute(config, new Uint8Array([1, 2, 3]));
+        expect(true).toBe(false);
+      } catch (e) {
+        expect(e).toBeInstanceOf(HttpError);
+        const err = e as HttpError;
+        expect(err.body).toBe("task[0].metadata.exif: must be a boolean");
+      }
+    });
+
+    test("throws error for invalid metadata stats value", async () => {
+      const engine = createMockEngine();
+      const client = createMockClient();
+      const executor = new PipelineExecutor(
+        engine as never,
+        client as never,
+        mockS3Config,
+        {
+          maxTasks: 10,
+          enableFetch: false,
+          dimensionLimit: DEFAULT_DIMENSION_LIMIT,
+        },
+      );
+
+      const config = {
+        tasks: [
+          {
+            id: "t1",
+            transform: { format: ImageType.Jpeg },
+            output: { bucket: "b", key: "k" },
+            metadata: { stats: 42 },
+          },
+        ],
+      } as unknown as PipelineConfig;
+
+      try {
+        await executor.execute(config, new Uint8Array([1, 2, 3]));
+        expect(true).toBe(false);
+      } catch (e) {
+        expect(e).toBeInstanceOf(HttpError);
+        const err = e as HttpError;
+        expect(err.body).toBe("task[0].metadata.stats: must be a boolean");
+      }
+    });
+
+    test("metadata error for second task uses correct index", async () => {
+      const engine = createMockEngine();
+      const client = createMockClient();
+      const executor = new PipelineExecutor(
+        engine as never,
+        client as never,
+        mockS3Config,
+        {
+          maxTasks: 10,
+          enableFetch: false,
+          dimensionLimit: DEFAULT_DIMENSION_LIMIT,
+        },
+      );
+
+      const config = {
+        tasks: [
+          {
+            id: "t1",
+            transform: { format: ImageType.Jpeg },
+            output: { bucket: "b", key: "k1" },
+          },
+          {
+            id: "t2",
+            transform: { format: ImageType.Jpeg },
+            output: { bucket: "b", key: "k2" },
+            metadata: { thumbhash: "yes" },
+          },
+        ],
+      } as unknown as PipelineConfig;
+
+      try {
+        await executor.execute(config, new Uint8Array([1, 2, 3]));
+        expect(true).toBe(false);
+      } catch (e) {
+        expect(e).toBeInstanceOf(HttpError);
+        const err = e as HttpError;
+        expect(err.body).toBe("task[1].metadata.thumbhash: must be a boolean");
+      }
+    });
+  });
+
   describe("image source", () => {
     test("throws error when no image is provided", async () => {
       const engine = createMockEngine();

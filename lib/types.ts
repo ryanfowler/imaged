@@ -75,6 +75,8 @@ export interface ImageOptions {
   preset?: ImagePreset;
 }
 
+export type TransformOptions = Omit<ImageOptions, "data">;
+
 export const IMAGE_PRESETS = ["default", "quality", "size"] as const;
 export type ImagePreset = (typeof IMAGE_PRESETS)[number];
 
@@ -219,21 +221,7 @@ export interface PipelineConfig {
 
 export interface PipelineTask {
   id: string;
-  transform: {
-    format: ImageType;
-    width?: number;
-    height?: number;
-    quality?: number;
-    blur?: boolean | number;
-    greyscale?: boolean;
-    lossless?: boolean;
-    progressive?: boolean;
-    effort?: number;
-    fit?: ImageFit;
-    kernel?: ImageKernel;
-    position?: ImagePosition;
-    preset?: ImagePreset;
-  };
+  transform: TransformOptions;
   output: S3Output;
   metadata?: {
     exif?: boolean;

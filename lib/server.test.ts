@@ -32,6 +32,25 @@ describe("createParseContext", () => {
     const ctx = createParseContext({ strict: "0" }, DEFAULT_DIMENSION_LIMIT);
     expect(ctx.strict).toBe(false);
   });
+
+  test("creates context with strict=true for unrecognized value like 'yes'", () => {
+    const ctx = createParseContext({ strict: "yes" }, DEFAULT_DIMENSION_LIMIT);
+    expect(ctx.strict).toBe(true);
+    // No warning is added for the strict param itself
+    expect(ctx.warnings).toEqual([]);
+  });
+
+  test("creates context with strict=true for empty string", () => {
+    const ctx = createParseContext({ strict: "" }, DEFAULT_DIMENSION_LIMIT);
+    expect(ctx.strict).toBe(true);
+  });
+
+  test("initializes new ParseContext fields", () => {
+    const ctx = createParseContext({}, DEFAULT_DIMENSION_LIMIT);
+    expect(ctx.failFast).toBe(false);
+    expect(ctx.fromString).toBe(true);
+    expect(ctx.prefix).toBe("");
+  });
 });
 
 describe("parseImageOps", () => {

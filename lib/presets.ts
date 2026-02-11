@@ -7,9 +7,8 @@ export function getPreset(
   const preset: ImagePreset = maybePreset || "default";
   switch (imgType) {
     case ImageType.Avif:
-      return AVIF_PRESETS[preset];
     case ImageType.Heic:
-      return HEIC_PRESETS[preset];
+      return AVIF_HEIC_PRESETS[preset];
     case ImageType.Jpeg:
       return JPEG_PRESETS[preset];
     case ImageType.JpegXL:
@@ -27,25 +26,7 @@ export function getPreset(
 
 type PresetValues = Record<ImagePreset, PresetOptions>;
 
-const AVIF_PRESETS = {
-  default: {
-    quality: 45,
-    effort: 2,
-    chromaSubsampling: "4:2:0",
-  },
-  quality: {
-    quality: 60,
-    effort: 6,
-    chromaSubsampling: "4:4:4",
-  },
-  size: {
-    quality: 40,
-    effort: 6,
-    chromaSubsampling: "4:2:0",
-  },
-};
-
-const HEIC_PRESETS = {
+const AVIF_HEIC_PRESETS = {
   default: {
     quality: 45,
     effort: 2,
