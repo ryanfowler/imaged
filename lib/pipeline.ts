@@ -3,27 +3,21 @@ import type { ImageEngine } from "./image.ts";
 import { createS3Client, getS3Url, uploadToS3 } from "./s3.ts";
 import {
   HttpError,
-  type ImageOptions,
   type MetadataResult,
   type PipelineConfig,
   type PipelineResponse,
   type PipelineTask,
   type S3Config,
   type TaskResult,
+  type TransformOptions,
 } from "./types.ts";
 import {
   getMimetype,
+  type ParseContext,
+  parseMetadataFlags,
+  parseTransformOptions,
   validateContentType,
-  validateBlurStrict,
-  validateBooleanStrict,
-  validateDimensionStrict,
-  validateEffortStrict,
-  validateFitStrict,
-  validateFormatStrict,
-  validateKernelStrict,
-  validatePositionStrict,
-  validatePresetStrict,
-  validateQualityStrict,
+  validateFormat,
 } from "./validation.ts";
 
 import type { S3Client } from "bun";
@@ -176,40 +170,28 @@ export class PipelineExecutor {
     index: number,
     dimensionLimit: number,
   ): ParsedTask {
-    const prefix = `task[${index}].transform`;
-    const t = task.transform;
-
-    // Parse format
-    const format = validateFormatStrict(t.format, prefix);
-
-    // Parse and validate all transform options
-    const options: Omit<ImageOptions, "data"> = {
-      format,
-      width: validateDimensionStrict(t.width, "width", prefix, dimensionLimit),
-      height: validateDimensionStrict(t.height, "height", prefix, dimensionLimit),
-      quality: validateQualityStrict(t.quality, prefix),
-      blur: validateBlurStrict(t.blur, prefix),
-      greyscale: validateBooleanStrict(t.greyscale, "greyscale", prefix),
-      lossless: validateBooleanStrict(t.lossless, "lossless", prefix),
-      progressive: validateBooleanStrict(t.progressive, "progressive", prefix),
-      effort: validateEffortStrict(t.effort, format, prefix),
-      fit: validateFitStrict(t.fit, prefix),
-      kernel: validateKernelStrict(t.kernel, prefix),
-      position: validatePositionStrict(t.position, prefix),
-      preset: validatePresetStrict(t.preset, prefix),
+    const ctx: ParseContext = {
+      strict: false,
+      failFast: true,
+      fromString: false,
+      prefix: `task[${index}].transform.`,
+      warnings: [],
+      dimensionLimit,
     };
+    const format = validateFormat(task.transform.format, ctx);
+    const options = parseTransformOptions(
+      task.transform as Record<string, unknown>,
+      format,
+      ctx,
+    );
 
-    // Parse metadata options if provided (empty object returns basic metadata)
     let metadata: ParsedTask["metadata"];
     if (task.metadata) {
-      const metaPrefix = `task[${index}].metadata`;
-      metadata = {
-        exif: validateBooleanStrict(task.metadata.exif, "exif", metaPrefix) ?? false,
-        stats: validateBooleanStrict(task.metadata.stats, "stats", metaPrefix) ?? false,
-        thumbhash:
-          validateBooleanStrict(task.metadata.thumbhash, "thumbhash", metaPrefix) ??
-          false,
+      const metaCtx: ParseContext = {
+        ...ctx,
+        prefix: `task[${index}].metadata.`,
       };
+      metadata = parseMetadataFlags(task.metadata as Record<string, unknown>, metaCtx);
     }
 
     return {
@@ -286,7 +268,7 @@ export class PipelineExecutor {
 
 interface ParsedTask {
   id: string;
-  options: Omit<ImageOptions, "data">;
+  options: TransformOptions;
   output: PipelineTask["output"];
   metadata?: {
     exif: boolean;

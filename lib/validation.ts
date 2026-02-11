@@ -4,8 +4,8 @@ import {
   ImageFit,
   ImageKernel,
   ImagePosition,
-  type ImagePreset,
   ImageType,
+  type TransformOptions,
 } from "./types.ts";
 
 // ============================================================================
@@ -44,6 +44,9 @@ export interface ParseWarning {
 
 export interface ParseContext {
   strict: boolean;
+  failFast: boolean;
+  fromString: boolean;
+  prefix: string;
   warnings: ParseWarning[];
   dimensionLimit: number;
 }
@@ -293,7 +296,6 @@ export function validateBlurCore(
 
 export function validateDimensionCore(
   value: unknown,
-  _key: string,
   limit: number,
   fromString: boolean,
 ): ValidationResult<number | undefined> {
@@ -390,298 +392,171 @@ export function validateEnumCore<T extends string>(
 }
 
 // ============================================================================
-// Lenient wrappers (for server.ts) - collect warnings + return clamped values
+// Unified field resolution - replaces all lenient/strict wrappers
 // ============================================================================
 
-export function parseBooleanLenient(
-  value: string | undefined,
+function resolveField<T>(
+  result: ValidationResult<T>,
   key: string,
+  rawValue: unknown,
   ctx: ParseContext,
-): boolean | undefined {
-  const result = validateBooleanCore(value, true);
+): T | undefined {
   if (result.ok === false) {
-    addWarning(ctx, key, value ?? "", result.error);
+    if (ctx.failFast) {
+      throw new HttpError(400, `${ctx.prefix}${key}: ${result.error}`);
+    }
+    addWarning(ctx, key, String(rawValue ?? ""), result.error);
     return undefined;
   }
   if ("warning" in result) {
-    addWarning(ctx, key, value ?? "", result.warning);
-  }
-  return result.value;
-}
-
-export function parseQualityLenient(
-  value: string | undefined,
-  ctx: ParseContext,
-): number | undefined {
-  const result = validateQualityCore(value, true);
-  if (result.ok === false) {
-    addWarning(ctx, "quality", value ?? "", result.error);
-    return undefined;
-  }
-  if ("warning" in result) {
-    addWarning(ctx, "quality", value ?? "", result.warning);
-  }
-  return result.value;
-}
-
-export function parseBlurLenient(
-  value: string | undefined,
-  ctx: ParseContext,
-): boolean | number | undefined {
-  const result = validateBlurCore(value, true);
-  if (result.ok === false) {
-    addWarning(ctx, "blur", value ?? "", result.error);
-    return undefined;
-  }
-  if ("warning" in result) {
-    addWarning(ctx, "blur", value ?? "", result.warning);
-  }
-  return result.value;
-}
-
-export function parseDimensionLenient(
-  value: string | undefined,
-  key: string,
-  ctx: ParseContext,
-): number | undefined {
-  const result = validateDimensionCore(value, key, ctx.dimensionLimit, true);
-  if (result.ok === false) {
-    addWarning(ctx, key, value ?? "", result.error);
-    return undefined;
-  }
-  if ("warning" in result) {
-    addWarning(ctx, key, value ?? "", result.warning);
-  }
-  return result.value;
-}
-
-export function parseEffortLenient(
-  value: string | undefined,
-  format: ImageType,
-  ctx: ParseContext,
-): number | undefined {
-  const result = validateEffortCore(value, format, true);
-  if (result.ok === false) {
-    addWarning(ctx, "effort", value ?? "", result.error);
-    return undefined;
-  }
-  if ("warning" in result) {
-    addWarning(ctx, "effort", value ?? "", result.warning);
-  }
-  return result.value;
-}
-
-export function parseFitLenient(
-  value: string | undefined,
-  ctx: ParseContext,
-): ImageFit | undefined {
-  const result = validateEnumCore<ImageFit>(value, IMAGE_FIT_SET, VALID_FITS, true);
-  if (result.ok === false) {
-    addWarning(ctx, "fit", value ?? "", result.error);
-    return undefined;
-  }
-  return result.value;
-}
-
-export function parseKernelLenient(
-  value: string | undefined,
-  ctx: ParseContext,
-): ImageKernel | undefined {
-  const result = validateEnumCore<ImageKernel>(
-    value,
-    IMAGE_KERNEL_SET,
-    VALID_KERNELS,
-    true,
-  );
-  if (result.ok === false) {
-    addWarning(ctx, "kernel", value ?? "", result.error);
-    return undefined;
-  }
-  return result.value;
-}
-
-export function parsePositionLenient(
-  value: string | undefined,
-  ctx: ParseContext,
-): ImagePosition | undefined {
-  const result = validateEnumCore<ImagePosition>(
-    value,
-    IMAGE_POSITION_SET,
-    VALID_POSITIONS,
-    true,
-  );
-  if (result.ok === false) {
-    addWarning(ctx, "position", value ?? "", result.error);
-    return undefined;
-  }
-  return result.value;
-}
-
-export function parsePresetLenient(
-  value: string | undefined,
-  ctx: ParseContext,
-): ImagePreset | undefined {
-  const result = validateEnumCore<ImagePreset>(
-    value,
-    IMAGE_PRESET_SET,
-    VALID_PRESETS,
-    true,
-  );
-  if (result.ok === false) {
-    addWarning(ctx, "preset", value ?? "", result.error);
-    return undefined;
+    if (ctx.failFast) {
+      throw new HttpError(400, `${ctx.prefix}${key}: ${result.warning}`);
+    }
+    addWarning(ctx, key, String(rawValue ?? ""), result.warning);
   }
   return result.value;
 }
 
 // ============================================================================
-// Strict validators (for pipeline.ts) - throw HttpError on invalid input
-// These accept typed values (from JSON) and a field prefix for error messages
+// Shared parsers - used by both server.ts and pipeline.ts
 // ============================================================================
 
-export function validateFormatStrict(value: unknown, prefix: string): ImageType {
+export function validateFormat(value: unknown, ctx: ParseContext): ImageType {
   if (typeof value !== "string") {
-    throw new HttpError(400, `${prefix}.format: must be a string`);
+    throw new HttpError(400, `${ctx.prefix}format: must be a string`);
   }
   const normalized = normalizeFormat(value);
   if (!IMAGE_TYPE_SET.has(normalized)) {
     throw new HttpError(
       400,
-      `${prefix}.format: unknown format '${value}', valid: ${VALID_FORMATS}`,
+      `${ctx.prefix}format: unknown format '${value}', valid: ${VALID_FORMATS}`,
     );
   }
   return normalized as ImageType;
 }
 
-export function validateDimensionStrict(
-  value: unknown,
-  key: string,
-  prefix: string,
-  dimensionLimit: number,
-): number | undefined {
-  const result = validateDimensionCore(value, key, dimensionLimit, false);
-  if (result.ok === false) {
-    throw new HttpError(400, `${prefix}.${key}: ${result.error}`);
-  }
-  if ("warning" in result) {
-    throw new HttpError(400, `${prefix}.${key}: ${result.warning}`);
-  }
-  return result.value;
-}
-
-export function validateQualityStrict(
-  value: unknown,
-  prefix: string,
-): number | undefined {
-  const result = validateQualityCore(value, false);
-  if (result.ok === false) {
-    throw new HttpError(400, `${prefix}.quality: ${result.error}`);
-  }
-  if ("warning" in result) {
-    throw new HttpError(400, `${prefix}.quality: ${result.warning}`);
-  }
-  return result.value;
-}
-
-export function validateBlurStrict(
-  value: unknown,
-  prefix: string,
-): boolean | number | undefined {
-  const result = validateBlurCore(value, false);
-  if (result.ok === false) {
-    throw new HttpError(400, `${prefix}.blur: ${result.error}`);
-  }
-  if ("warning" in result) {
-    throw new HttpError(400, `${prefix}.blur: ${result.warning}`);
-  }
-  return result.value;
-}
-
-export function validateBooleanStrict(
-  value: unknown,
-  key: string,
-  prefix: string,
-): boolean | undefined {
-  const result = validateBooleanCore(value, false);
-  if (result.ok === false) {
-    throw new HttpError(400, `${prefix}.${key}: ${result.error}`);
-  }
-  if ("warning" in result) {
-    throw new HttpError(400, `${prefix}.${key}: ${result.warning}`);
-  }
-  return result.value;
-}
-
-export function validateEffortStrict(
-  value: unknown,
+export function parseTransformOptions(
+  input: Record<string, unknown>,
   format: ImageType,
-  prefix: string,
-): number | undefined {
-  const result = validateEffortCore(value, format, false);
-  if (result.ok === false) {
-    throw new HttpError(400, `${prefix}.effort: ${result.error}`);
-  }
-  if ("warning" in result) {
-    throw new HttpError(400, `${prefix}.effort: ${result.warning}`);
-  }
-  return result.value;
+  ctx: ParseContext,
+): TransformOptions {
+  return {
+    format,
+    width: resolveField(
+      validateDimensionCore(input["width"], ctx.dimensionLimit, ctx.fromString),
+      "width",
+      input["width"],
+      ctx,
+    ),
+    height: resolveField(
+      validateDimensionCore(input["height"], ctx.dimensionLimit, ctx.fromString),
+      "height",
+      input["height"],
+      ctx,
+    ),
+    quality: resolveField(
+      validateQualityCore(input["quality"], ctx.fromString),
+      "quality",
+      input["quality"],
+      ctx,
+    ),
+    blur: resolveField(
+      validateBlurCore(input["blur"], ctx.fromString),
+      "blur",
+      input["blur"],
+      ctx,
+    ),
+    greyscale: resolveField(
+      validateBooleanCore(input["greyscale"], ctx.fromString),
+      "greyscale",
+      input["greyscale"],
+      ctx,
+    ),
+    lossless: resolveField(
+      validateBooleanCore(input["lossless"], ctx.fromString),
+      "lossless",
+      input["lossless"],
+      ctx,
+    ),
+    progressive: resolveField(
+      validateBooleanCore(input["progressive"], ctx.fromString),
+      "progressive",
+      input["progressive"],
+      ctx,
+    ),
+    effort: resolveField(
+      validateEffortCore(input["effort"], format, ctx.fromString),
+      "effort",
+      input["effort"],
+      ctx,
+    ),
+    fit: resolveField(
+      validateEnumCore(input["fit"], IMAGE_FIT_SET, VALID_FITS, ctx.fromString),
+      "fit",
+      input["fit"],
+      ctx,
+    ),
+    kernel: resolveField(
+      validateEnumCore(
+        input["kernel"],
+        IMAGE_KERNEL_SET,
+        VALID_KERNELS,
+        ctx.fromString,
+      ),
+      "kernel",
+      input["kernel"],
+      ctx,
+    ),
+    position: resolveField(
+      validateEnumCore(
+        input["position"],
+        IMAGE_POSITION_SET,
+        VALID_POSITIONS,
+        ctx.fromString,
+      ),
+      "position",
+      input["position"],
+      ctx,
+    ),
+    preset: resolveField(
+      validateEnumCore(
+        input["preset"],
+        IMAGE_PRESET_SET,
+        VALID_PRESETS,
+        ctx.fromString,
+      ),
+      "preset",
+      input["preset"],
+      ctx,
+    ),
+  };
 }
 
-export function validateFitStrict(
-  value: unknown,
-  prefix: string,
-): ImageFit | undefined {
-  const result = validateEnumCore<ImageFit>(value, IMAGE_FIT_SET, VALID_FITS, false);
-  if (result.ok === false) {
-    throw new HttpError(400, `${prefix}.fit: ${result.error}`);
-  }
-  return result.value;
-}
-
-export function validateKernelStrict(
-  value: unknown,
-  prefix: string,
-): ImageKernel | undefined {
-  const result = validateEnumCore<ImageKernel>(
-    value,
-    IMAGE_KERNEL_SET,
-    VALID_KERNELS,
-    false,
-  );
-  if (result.ok === false) {
-    throw new HttpError(400, `${prefix}.kernel: ${result.error}`);
-  }
-  return result.value;
-}
-
-export function validatePositionStrict(
-  value: unknown,
-  prefix: string,
-): ImagePosition | undefined {
-  const result = validateEnumCore<ImagePosition>(
-    value,
-    IMAGE_POSITION_SET,
-    VALID_POSITIONS,
-    false,
-  );
-  if (result.ok === false) {
-    throw new HttpError(400, `${prefix}.position: ${result.error}`);
-  }
-  return result.value;
-}
-
-export function validatePresetStrict(
-  value: unknown,
-  prefix: string,
-): ImagePreset | undefined {
-  const result = validateEnumCore<ImagePreset>(
-    value,
-    IMAGE_PRESET_SET,
-    VALID_PRESETS,
-    false,
-  );
-  if (result.ok === false) {
-    throw new HttpError(400, `${prefix}.preset: ${result.error}`);
-  }
-  return result.value;
+export function parseMetadataFlags(
+  input: Record<string, unknown>,
+  ctx: ParseContext,
+): { exif: boolean; stats: boolean; thumbhash: boolean } {
+  return {
+    exif:
+      resolveField(
+        validateBooleanCore(input["exif"], ctx.fromString),
+        "exif",
+        input["exif"],
+        ctx,
+      ) ?? false,
+    stats:
+      resolveField(
+        validateBooleanCore(input["stats"], ctx.fromString),
+        "stats",
+        input["stats"],
+        ctx,
+      ) ?? false,
+    thumbhash:
+      resolveField(
+        validateBooleanCore(input["thumbhash"], ctx.fromString),
+        "thumbhash",
+        input["thumbhash"],
+        ctx,
+      ) ?? false,
+  };
 }

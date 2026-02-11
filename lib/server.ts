@@ -6,28 +6,19 @@ import { ImageEngine } from "./image.ts";
 import type { PipelineExecutor } from "./pipeline.ts";
 import {
   HttpError,
-  ImageFit,
-  ImageKernel,
-  ImagePosition,
-  type ImagePreset,
   type PipelineConfig,
   ImageType,
+  type TransformOptions,
 } from "./types.ts";
 import {
   addWarning,
   getMimetype,
   IMAGE_TYPE_SET,
   normalizeFormat,
-  parseBlurLenient,
-  parseBooleanLenient,
-  parseDimensionLenient,
-  parseEffortLenient,
-  parseFitLenient,
-  parseKernelLenient,
   type ParseContext,
-  parsePositionLenient,
-  parsePresetLenient,
-  parseQualityLenient,
+  parseMetadataFlags,
+  parseTransformOptions,
+  validateBooleanCore,
   VALID_FORMATS,
 } from "./validation.ts";
 
@@ -208,26 +199,11 @@ export class Server {
   private performTransform = async (
     reply: FastifyReply,
     data: Uint8Array,
-    ops: Options,
+    ops: TransformOptions,
     ctx: ParseContext,
     start: number,
   ) => {
-    const img = await this.engine.perform({
-      data,
-      format: ops.format,
-      width: ops.width,
-      height: ops.height,
-      quality: ops.quality,
-      blur: ops.blur,
-      greyscale: ops.greyscale,
-      lossless: ops.lossless,
-      progressive: ops.progressive,
-      effort: ops.effort,
-      fit: ops.fit,
-      kernel: ops.kernel,
-      position: ops.position,
-      preset: ops.preset,
-    });
+    const img = await this.engine.perform({ data, ...ops });
 
     const elapsed = Math.round(performance.now() - start);
     setWarningsHeader(reply, ctx);
@@ -357,26 +333,8 @@ export class Server {
   };
 }
 
-interface Options {
-  format: ImageType;
-  width?: number;
-  height?: number;
-  quality?: number;
-  blur?: boolean | number;
-  greyscale?: boolean;
-  lossless?: boolean;
-  progressive?: boolean;
-  effort?: number;
-  fit?: ImageFit;
-  kernel?: ImageKernel;
-  position?: ImagePosition;
-  preset?: ImagePreset;
-}
-
-// ParseContext is imported from validation.ts
-
 interface ParseResult {
-  options: Options;
+  options: TransformOptions;
   ctx: ParseContext;
 }
 
@@ -388,9 +346,16 @@ interface MetadataParseResult {
 }
 
 function createParseContext(params: QueryParams, dimensionLimit: number): ParseContext {
-  const ctx: ParseContext = { strict: false, warnings: [], dimensionLimit };
-  const strict = parseBooleanLenient(params["strict"], "strict", ctx);
-  ctx.strict = (ctx.warnings.length === 0 && strict) || false;
+  const ctx: ParseContext = {
+    strict: false,
+    failFast: false,
+    fromString: true,
+    prefix: "",
+    warnings: [],
+    dimensionLimit,
+  };
+  const strictResult = validateBooleanCore(params["strict"], true);
+  ctx.strict = (strictResult.ok && strictResult.value === true) || false;
   return ctx;
 }
 
@@ -471,21 +436,7 @@ function parseImageOps(
   validateKnownParams(params, KNOWN_TRANSFORM_PARAMS, ctx);
 
   const format = parseFormat(params, accept, ctx);
-  const options: Options = {
-    format,
-    width: parseDimensionLenient(params["width"], "width", ctx),
-    height: parseDimensionLenient(params["height"], "height", ctx),
-    quality: parseQualityLenient(params["quality"], ctx),
-    blur: parseBlurLenient(params["blur"], ctx),
-    greyscale: parseBooleanLenient(params["greyscale"], "greyscale", ctx),
-    lossless: parseBooleanLenient(params["lossless"], "lossless", ctx),
-    progressive: parseBooleanLenient(params["progressive"], "progressive", ctx),
-    effort: parseEffortLenient(params["effort"], format, ctx),
-    fit: parseFitLenient(params["fit"], ctx),
-    kernel: parseKernelLenient(params["kernel"], ctx),
-    position: parsePositionLenient(params["position"], ctx),
-    preset: parsePresetLenient(params["preset"], ctx),
-  };
+  const options = parseTransformOptions(params as Record<string, unknown>, format, ctx);
 
   throwIfErrorsText(ctx);
   return { options, ctx };
@@ -497,15 +448,9 @@ function parseMetadataOps(params: QueryParams): MetadataParseResult {
   // Validate unknown params
   validateKnownParams(params, KNOWN_METADATA_PARAMS, ctx);
 
-  const result: MetadataParseResult = {
-    exif: parseBooleanLenient(params["exif"], "exif", ctx) ?? false,
-    stats: parseBooleanLenient(params["stats"], "stats", ctx) ?? false,
-    thumbhash: parseBooleanLenient(params["thumbhash"], "thumbhash", ctx) ?? false,
-    ctx,
-  };
-
+  const flags = parseMetadataFlags(params as Record<string, unknown>, ctx);
   throwIfErrorsJson(ctx);
-  return result;
+  return { ...flags, ctx };
 }
 
 const DEFAULT_FORMAT = ImageType.Jpeg;
