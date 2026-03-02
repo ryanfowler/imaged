@@ -7,6 +7,7 @@ updates:
       day: monday
       time: "06:00"
       timezone: "America/Vancouver"
+    rebase-strategy: "recreate"
     open-pull-requests-limit: 10
     allow:
       - dependency-type: all
