@@ -17,7 +17,7 @@
         "bun-types": "1.3.11",
         "node-addon-api": "8.7.0",
         "node-gyp": "12.2.0",
-        "prettier": "3.8.1",
+        "prettier": "3.8.2",
         "typescript": "6.0.2",
       },
     },
@@ -242,7 +242,7 @@
 
     "pino-std-serializers": ["pino-std-serializers@7.0.0", "", {}, ""],
 
-    "prettier": ["prettier@3.8.1", "", { "bin": { "prettier": "bin/prettier.cjs" } }, "sha512-UOnG6LftzbdaHZcKoPFtOcCKztrQ57WkHDeRD9t/PTQtmT0NHSeWWepj6pS0z/N7+08BHFDQVUrfmfMRcZwbMg=="],
+    "prettier": ["prettier@3.8.2", "", { "bin": { "prettier": "bin/prettier.cjs" } }, "sha512-8c3mgTe0ASwWAJK+78dpviD+A8EqhndQPUBpNUIPt6+xWlIigCwfN01lWr9MAede4uqXGTEKeQWTvzb3vjia0Q=="],
 
     "proc-log": ["proc-log@6.1.0", "", {}, ""],
 
