@@ -133,6 +133,15 @@ describe("parseImageOps", () => {
       );
       expect(options.format).toBe(ImageType.Jpeg);
     });
+
+    test("handles repeated format query params as an array", () => {
+      const { options } = parseImageOps(
+        { format: ["avif", "webp", "jpeg"] as unknown as string },
+        "image/webp",
+        DEFAULT_DIMENSION_LIMIT,
+      );
+      expect(options.format).toBe(ImageType.Webp);
+    });
   });
 
   describe("width parsing", () => {

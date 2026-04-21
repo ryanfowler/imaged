@@ -460,11 +460,12 @@ function parseFormat(
   accept: string,
   ctx: ParseContext,
 ): ImageType {
-  const v = params["format"];
-  if (v == null || v === "") {
+  const raw = params["format"];
+  if (raw == null || raw === "") {
     return DEFAULT_FORMAT;
   }
 
+  const v = Array.isArray(raw) ? raw.join(",") : raw;
   const opts = v
     .split(",")
     .map((s) => s.trim().toLowerCase())
