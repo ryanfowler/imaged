@@ -147,6 +147,28 @@ describe("PipelineExecutor", () => {
   });
 
   describe("validation - structure", () => {
+    test("throws error when config is null", async () => {
+      const engine = createMockEngine();
+      const client = createMockClient();
+      const executor = new PipelineExecutor(
+        engine as never,
+        client as never,
+        mockS3Config,
+        {
+          maxTasks: 10,
+          enableFetch: false,
+          dimensionLimit: DEFAULT_DIMENSION_LIMIT,
+        },
+      );
+
+      await expect(
+        executor.execute(null as unknown as PipelineConfig, new Uint8Array([1, 2, 3])),
+      ).rejects.toThrow(HttpError);
+      await expect(
+        executor.execute(null as unknown as PipelineConfig, new Uint8Array([1, 2, 3])),
+      ).rejects.toThrow("config must be an object");
+    });
+
     test("throws error when tasks is not an array", async () => {
       const engine = createMockEngine();
       const client = createMockClient();
@@ -168,6 +190,30 @@ describe("PipelineExecutor", () => {
       );
       await expect(executor.execute(config, new Uint8Array([1, 2, 3]))).rejects.toThrow(
         "tasks must be an array",
+      );
+    });
+
+    test("throws error when task is null", async () => {
+      const engine = createMockEngine();
+      const client = createMockClient();
+      const executor = new PipelineExecutor(
+        engine as never,
+        client as never,
+        mockS3Config,
+        {
+          maxTasks: 10,
+          enableFetch: false,
+          dimensionLimit: DEFAULT_DIMENSION_LIMIT,
+        },
+      );
+
+      const config = { tasks: [null] } as unknown as PipelineConfig;
+
+      await expect(executor.execute(config, new Uint8Array([1, 2, 3]))).rejects.toThrow(
+        HttpError,
+      );
+      await expect(executor.execute(config, new Uint8Array([1, 2, 3]))).rejects.toThrow(
+        "task[0]: must be an object",
       );
     });
 
