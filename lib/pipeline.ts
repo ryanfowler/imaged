@@ -106,6 +106,10 @@ export class PipelineExecutor {
   }
 
   private validateConfigStructure(config: PipelineConfig): void {
+    if (!config || typeof config !== "object") {
+      throw new HttpError(400, "config must be an object");
+    }
+
     if (!config.tasks || !Array.isArray(config.tasks)) {
       throw new HttpError(400, "tasks must be an array");
     }
@@ -124,6 +128,10 @@ export class PipelineExecutor {
     const seenIds = new Set<string>();
     for (let i = 0; i < config.tasks.length; i++) {
       const task = config.tasks[i]!;
+
+      if (!task || typeof task !== "object") {
+        throw new HttpError(400, `task[${i}]: must be an object`);
+      }
 
       if (!task.id || typeof task.id !== "string") {
         throw new HttpError(400, `task[${i}]: id is required`);
