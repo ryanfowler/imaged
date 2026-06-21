@@ -6,7 +6,7 @@
       "name": "imaged",
       "dependencies": {
         "@fastify/multipart": "10.0.0",
-        "commander": "14.0.3",
+        "commander": "15.0.0",
         "exif-reader": "2.0.3",
         "fastify": "5.8.5",
         "pino": "10.3.1",
@@ -122,7 +122,7 @@
 
     "chownr": ["chownr@3.0.0", "", {}, ""],
 
-    "commander": ["commander@14.0.3", "", {}, "sha512-H+y0Jo/T1RZ9qPP4Eh1pkcQcLRglraJaSLoyOtHxu6AapkjWVCy2Sit1QQ4x3Dng8qDlSsZEet7g5Pq06MvTgw=="],
+    "commander": ["commander@15.0.0", "", {}, "sha512-z67u4ZhzCL/Tydu1lJARtEZYWbWaN7oYLHbsuzocr6y4N6WZAagG3RQ4FW61V1/0+jImpj293XfrcYnd1qxtPg=="],
 
     "cookie": ["cookie@1.1.1", "", {}, ""],
 
