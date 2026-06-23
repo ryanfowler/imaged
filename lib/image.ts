@@ -19,6 +19,8 @@ if (process.env["VIPS_CONCURRENCY"] === undefined) {
   sharp.concurrency(1);
 }
 
+type SharpInstance = ReturnType<typeof sharp>;
+
 export interface ImageEngineOptions {
   concurrency: number;
   pixelLimit: number;
@@ -193,7 +195,7 @@ export class ImageEngine {
   }
 }
 
-function applyFormat(img: sharp.Sharp, ops: ImageOptions): sharp.Sharp {
+function applyFormat(img: SharpInstance, ops: ImageOptions): SharpInstance {
   const preset = getPreset(ops.format, ops.preset);
   switch (ops.format) {
     case ImageType.Avif:
