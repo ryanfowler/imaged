@@ -217,9 +217,10 @@ fn process_image_inner(b: bytes::Bytes, ops: ProcessOptions) -> Result<ImageOutp
         out_img = out_img.blur(sigma);
     }
 
+    let out_type = ops.out_type.unwrap_or_else(|| img_type.into());
+    let mut out_img = normalize_output_image(out_img, out_type);
     out_img.set_color_space(image::metadata::Cicp::SRGB)?;
 
-    let out_type = ops.out_type.unwrap_or_else(|| img_type.into());
     let quality = ops
         .quality
         .map_or_else(|| out_type.default_quality(), |v| v.clamp(1, 100));
@@ -261,6 +262,29 @@ fn decode_avif(raw: &[u8]) -> Result<DynamicImage> {
 }
 
 fn decode_jpeg(raw: &[u8]) -> Result<DynamicImage> {
+    let header = match turbojpeg::read_header(raw) {
+        Ok(header) => header,
+        Err(_) => return decode_jpeg_with_image(raw),
+    };
+    if !matches!(
+        header.colorspace,
+        turbojpeg::Colorspace::RGB | turbojpeg::Colorspace::YCbCr | turbojpeg::Colorspace::Gray
+    ) {
+        return decode_jpeg_with_image(raw);
+    }
+
+    let img = match turbojpeg::decompress(raw, turbojpeg::PixelFormat::RGB) {
+        Ok(img) => img,
+        Err(_) => return decode_jpeg_with_image(raw),
+    };
+    let width = u32::try_from(img.width).context("jpeg width overflow")?;
+    let height = u32::try_from(img.height).context("jpeg height overflow")?;
+    let rgb = image::RgbImage::from_raw(width, height, img.pixels)
+        .ok_or_else(|| anyhow!("jpeg decoded buffer has invalid dimensions"))?;
+    Ok(DynamicImage::ImageRgb8(rgb))
+}
+
+fn decode_jpeg_with_image(raw: &[u8]) -> Result<DynamicImage> {
     image::load_from_memory_with_format(raw, ImageFormat::Jpeg).map_err(Into::into)
 }
 
@@ -344,6 +368,19 @@ fn mul_div_round(a: u32, b: u32, c: u32) -> Result<u32> {
     u32::try_from(out).context("dimension overflow")
 }
 
+fn normalize_output_image(img: DynamicImage, img_type: ImageType) -> DynamicImage {
+    match img_type {
+        ImageType::Jpeg => DynamicImage::ImageRgb8(img.into_rgb8()),
+        ImageType::Avif | ImageType::Png | ImageType::Tiff | ImageType::Webp => {
+            if img.has_alpha() {
+                DynamicImage::ImageRgba8(img.into_rgba8())
+            } else {
+                DynamicImage::ImageRgb8(img.into_rgb8())
+            }
+        }
+    }
+}
+
 fn encode_image(img: &DynamicImage, img_type: ImageType, quality: u32) -> Result<Vec<u8>> {
     match img_type {
         ImageType::Avif => encode_avif(img, quality),
@@ -367,9 +404,6 @@ fn encode_jpeg(img: &DynamicImage, quality: u32) -> Result<Vec<u8>> {
         DynamicImage::ImageRgb8(img) => {
             compress_jpeg_internal(img, quality, turbojpeg::Subsamp::Sub2x2)
         }
-        DynamicImage::ImageRgba8(img) => {
-            compress_jpeg_internal(img, quality, turbojpeg::Subsamp::Sub2x2)
-        }
         _ => return Err(anyhow!("unable to encode image as jpeg")),
     }?
     .to_owned();
@@ -389,13 +423,20 @@ fn encode_tiff(img: &DynamicImage, _quality: u32) -> Result<Vec<u8>> {
 }
 
 fn encode_webp(img: &DynamicImage, quality: u32) -> Result<Vec<u8>> {
-    let rgba = img.to_rgba8();
-    Ok(
-        webpx::Encoder::new_rgba(rgba.as_raw(), rgba.width(), rgba.height())
-            .quality(quality as f32)
-            .encode(webpx::Unstoppable)
-            .map_err(|err| anyhow!("webp: {err}"))?,
-    )
+    let encoder = match img {
+        DynamicImage::ImageRgb8(rgb) => {
+            webpx::Encoder::new_rgb(rgb.as_raw(), rgb.width(), rgb.height())
+        }
+        DynamicImage::ImageRgba8(rgba) => {
+            webpx::Encoder::new_rgba(rgba.as_raw(), rgba.width(), rgba.height())
+        }
+        _ => return Err(anyhow!("unable to encode image as webp")),
+    };
+
+    Ok(encoder
+        .quality(quality as f32)
+        .encode(webpx::Unstoppable)
+        .map_err(|err| anyhow!("webp: {err}"))?)
 }
 
 fn metadata_inner(buf: bytes::Bytes, ops: MetadataOptions) -> Result<ImageMetadata> {
@@ -475,7 +516,7 @@ impl JpegPixel for image::Luma<u8> {
 mod tests {
     use super::*;
     use base64::engine::general_purpose::STANDARD;
-    use image::{ImageBuffer, Rgb, codecs::jpeg::JpegEncoder};
+    use image::{ImageBuffer, Luma, Rgb, Rgba, codecs::jpeg::JpegEncoder};
 
     fn sample_image(width: u32, height: u32) -> DynamicImage {
         DynamicImage::ImageRgb8(ImageBuffer::from_fn(width, height, |x, y| {
@@ -515,6 +556,34 @@ mod tests {
         assert!(matches!(
             InputImageType::determine_image_type(raw),
             Some(actual) if actual as u8 == expected as u8
+        ));
+    }
+
+    #[test]
+    fn decodes_common_jpegs_to_rgb() {
+        let jpeg = encode_sample(ImageType::Jpeg, 32, 24, 80);
+        let img = decode_jpeg(&jpeg).unwrap();
+
+        assert_eq!(img.dimensions(), (32, 24));
+        assert!(matches!(img, DynamicImage::ImageRgb8(_)));
+    }
+
+    #[test]
+    fn normalizes_output_images_to_rgb_or_rgba() {
+        let gray = DynamicImage::ImageLuma8(ImageBuffer::from_pixel(2, 2, Luma([128])));
+        assert!(matches!(
+            normalize_output_image(gray, ImageType::Png),
+            DynamicImage::ImageRgb8(_)
+        ));
+
+        let rgba = DynamicImage::ImageRgba8(ImageBuffer::from_pixel(2, 2, Rgba([1, 2, 3, 128])));
+        assert!(matches!(
+            normalize_output_image(rgba.clone(), ImageType::Webp),
+            DynamicImage::ImageRgba8(_)
+        ));
+        assert!(matches!(
+            normalize_output_image(rgba, ImageType::Jpeg),
+            DynamicImage::ImageRgb8(_)
         ));
     }
 
