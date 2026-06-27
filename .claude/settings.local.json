@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bun run:*)",
+      "WebSearch",
+      "WebFetch(domain:bun.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(bun test:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nUpgrade Bun to v1.3.8\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git reset:*)",
+      "Bash(git checkout:*)",
+      "Bash(bunx prettier:*)",
+      "Bash(grep:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nrefactor: unify validation layer and shared types\n\nReplace 20 near-identical validation wrapper functions with a single\nresolveField function that handles both lenient \\(server\\) and fail-fast\n\\(pipeline\\) modes via ParseContext. Extract shared parseTransformOptions,\nparseMetadataFlags, and validateFormat functions used by both server and\npipeline. Consolidate three duplicate TransformOptions type definitions\ninto one. Merge identical AVIF/HEIC preset objects.\n\n~300 lines of boilerplate removed, ~50 lines of shared code added.\nEOF\n\\)\")",
+      "Bash(git push:*)"
+    ]
+  }
+}
