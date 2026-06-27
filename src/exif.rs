@@ -182,3 +182,208 @@ impl ExifData {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const BYTE: u16 = 1;
+    const ASCII: u16 = 2;
+    const SHORT: u16 = 3;
+    const LONG: u16 = 4;
+    const RATIONAL: u16 = 5;
+
+    struct IfdEntry {
+        tag: u16,
+        field_type: u16,
+        count: u32,
+        value: Vec<u8>,
+    }
+
+    fn ascii(tag: u16, value: &str) -> IfdEntry {
+        let mut bytes = value.as_bytes().to_vec();
+        bytes.push(0);
+        IfdEntry {
+            tag,
+            field_type: ASCII,
+            count: bytes.len() as u32,
+            value: bytes,
+        }
+    }
+
+    fn byte(tag: u16, value: u8) -> IfdEntry {
+        IfdEntry {
+            tag,
+            field_type: BYTE,
+            count: 1,
+            value: vec![value],
+        }
+    }
+
+    fn short(tag: u16, value: u16) -> IfdEntry {
+        IfdEntry {
+            tag,
+            field_type: SHORT,
+            count: 1,
+            value: value.to_le_bytes().to_vec(),
+        }
+    }
+
+    fn long(tag: u16, value: u32) -> IfdEntry {
+        IfdEntry {
+            tag,
+            field_type: LONG,
+            count: 1,
+            value: value.to_le_bytes().to_vec(),
+        }
+    }
+
+    fn rational(tag: u16, values: &[(u32, u32)]) -> IfdEntry {
+        let mut value = Vec::with_capacity(values.len() * 8);
+        for (num, denom) in values {
+            value.extend(num.to_le_bytes());
+            value.extend(denom.to_le_bytes());
+        }
+        IfdEntry {
+            tag,
+            field_type: RATIONAL,
+            count: values.len() as u32,
+            value,
+        }
+    }
+
+    fn ifd_size(entries_len: usize) -> u32 {
+        2 + entries_len as u32 * 12 + 4
+    }
+
+    fn write_ifd(
+        out: &mut Vec<u8>,
+        entries: &mut [IfdEntry],
+        external: &mut Vec<u8>,
+        data_start: u32,
+    ) {
+        entries.sort_by_key(|entry| entry.tag);
+        out.extend((entries.len() as u16).to_le_bytes());
+
+        for entry in entries {
+            out.extend(entry.tag.to_le_bytes());
+            out.extend(entry.field_type.to_le_bytes());
+            out.extend(entry.count.to_le_bytes());
+
+            if entry.value.len() <= 4 {
+                out.extend(&entry.value);
+                out.resize(out.len() + 4 - entry.value.len(), 0);
+            } else {
+                let offset = data_start + external.len() as u32;
+                out.extend(offset.to_le_bytes());
+                external.extend(&entry.value);
+            }
+        }
+
+        out.extend(0_u32.to_le_bytes());
+    }
+
+    fn make_tiff_with_full_exif() -> Vec<u8> {
+        let ifd0_len = 6;
+        let exif_len = 3;
+        let gps_len = 6;
+        let ifd0_offset = 8_u32;
+        let exif_offset = ifd0_offset + ifd_size(ifd0_len);
+        let gps_offset = exif_offset + ifd_size(exif_len);
+        let data_start = gps_offset + ifd_size(gps_len);
+
+        let mut ifd0 = vec![
+            ascii(0x010f, "Test Camera Make"),
+            ascii(0x0110, "Test Camera Model"),
+            short(0x0112, 6),
+            ascii(0x0131, "Test Software 1.0"),
+            long(0x8769, exif_offset),
+            long(0x8825, gps_offset),
+        ];
+        let mut exif = vec![
+            rational(0x829a, &[(1, 250)]),
+            rational(0x829d, &[(28, 10)]),
+            short(0x8827, 400),
+        ];
+        let mut gps = vec![
+            ascii(0x0001, "N"),
+            rational(0x0002, &[(40, 1), (26, 1), (46, 1)]),
+            ascii(0x0003, "W"),
+            rational(0x0004, &[(74, 1), (0, 1), (21, 1)]),
+            byte(0x0005, 0),
+            rational(0x0006, &[(1005, 10)]),
+        ];
+
+        let mut out = Vec::new();
+        out.extend(b"II");
+        out.extend(42_u16.to_le_bytes());
+        out.extend(ifd0_offset.to_le_bytes());
+
+        let mut external = Vec::new();
+        write_ifd(&mut out, &mut ifd0, &mut external, data_start);
+        write_ifd(&mut out, &mut exif, &mut external, data_start);
+        write_ifd(&mut out, &mut gps, &mut external, data_start);
+        out.extend(external);
+        out
+    }
+
+    fn make_tiff_with_make_only() -> Vec<u8> {
+        let mut ifd0 = vec![ascii(0x010f, "Test")];
+        let data_start = 8 + ifd_size(ifd0.len());
+
+        let mut out = Vec::new();
+        out.extend(b"II");
+        out.extend(42_u16.to_le_bytes());
+        out.extend(8_u32.to_le_bytes());
+
+        let mut external = Vec::new();
+        write_ifd(&mut out, &mut ifd0, &mut external, data_start);
+        out.extend(external);
+        out
+    }
+
+    #[test]
+    fn parses_camera_info_fields() {
+        let buf = make_tiff_with_full_exif();
+        let data = ExifData::new(&buf).unwrap().get_data();
+
+        assert_eq!(data.make.as_deref(), Some("Test Camera Make"));
+        assert_eq!(data.model.as_deref(), Some("Test Camera Model"));
+        assert_eq!(data.software.as_deref(), Some("Test Software 1.0"));
+    }
+
+    #[test]
+    fn parses_orientation_and_exposure_settings() {
+        let buf = make_tiff_with_full_exif();
+        let data = ExifData::new(&buf).unwrap().get_data();
+
+        assert_eq!(data.orientation, Some(6));
+        assert_eq!(data.exposure_time.as_deref(), Some("1/250"));
+        assert_eq!(data.iso, Some(400));
+        assert!((data.f_number.unwrap() - 2.8).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn parses_gps_coordinates_and_altitude() {
+        let buf = make_tiff_with_full_exif();
+        let data = ExifData::new(&buf).unwrap().get_data();
+
+        assert!((data.latitude.unwrap() - 40.44611).abs() < 0.00001);
+        assert!((data.longitude.unwrap() + 74.00583).abs() < 0.00001);
+        assert_eq!(data.altitude, Some(100.5));
+    }
+
+    #[test]
+    fn missing_exif_fields_are_none() {
+        let buf = make_tiff_with_make_only();
+        let data = ExifData::new(&buf).unwrap().get_data();
+
+        assert_eq!(data.make.as_deref(), Some("Test"));
+        assert_eq!(data.model, None);
+        assert_eq!(data.latitude, None);
+        assert_eq!(data.longitude, None);
+        assert_eq!(data.altitude, None);
+        assert_eq!(data.iso, None);
+        assert_eq!(data.f_number, None);
+    }
+}

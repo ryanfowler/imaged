@@ -468,3 +468,290 @@ impl JpegPixel for image::Rgba<u8> {
 impl JpegPixel for image::Luma<u8> {
     const PIXEL_FORMAT: turbojpeg::PixelFormat = turbojpeg::PixelFormat::GRAY;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use base64::engine::general_purpose::STANDARD;
+    use image::{ImageBuffer, Rgb, codecs::jpeg::JpegEncoder};
+
+    fn sample_image(width: u32, height: u32) -> DynamicImage {
+        DynamicImage::ImageRgb8(ImageBuffer::from_fn(width, height, |x, y| {
+            Rgb([
+                ((x * 3 + y * 5) % 256) as u8,
+                ((x * 7 + y * 11) % 256) as u8,
+                ((x * 13 + y * 17) % 256) as u8,
+            ])
+        }))
+    }
+
+    fn encode_sample(img_type: ImageType, width: u32, height: u32, quality: u32) -> bytes::Bytes {
+        let img = sample_image(width, height);
+        let buf = match img_type {
+            ImageType::Jpeg => {
+                let mut out = Vec::new();
+                let mut enc = JpegEncoder::new_with_quality(&mut out, quality as u8);
+                enc.encode_image(&img).unwrap();
+                out
+            }
+            _ => encode_image(&img, img_type, quality).unwrap(),
+        };
+        bytes::Bytes::from(buf)
+    }
+
+    fn default_options(out_type: Option<ImageType>) -> ProcessOptions {
+        ProcessOptions {
+            width: None,
+            height: None,
+            out_type,
+            quality: None,
+            blur: None,
+        }
+    }
+
+    fn assert_input_type(raw: &[u8], expected: InputImageType) {
+        assert!(matches!(
+            InputImageType::determine_image_type(raw),
+            Some(actual) if actual as u8 == expected as u8
+        ));
+    }
+
+    #[test]
+    fn detects_supported_image_formats() {
+        let jpeg = encode_sample(ImageType::Jpeg, 8, 8, 80);
+        let png = encode_sample(ImageType::Png, 8, 8, 80);
+        let tiff = encode_sample(ImageType::Tiff, 8, 8, 80);
+        let webp = encode_sample(ImageType::Webp, 8, 8, 80);
+
+        assert_input_type(&jpeg, InputImageType::Jpeg);
+        assert_input_type(&png, InputImageType::Png);
+        assert_input_type(&tiff, InputImageType::Tiff);
+        assert_input_type(&webp, InputImageType::Webp);
+
+        let mut avif_header = vec![0; 12];
+        avif_header[4..12].copy_from_slice(b"ftypavif");
+        assert_input_type(&avif_header, InputImageType::Avif);
+    }
+
+    #[test]
+    fn rejects_small_or_unknown_image_format() {
+        assert!(type_from_raw(&[0, 1, 2]).is_err());
+        assert!(type_from_raw(&[0; 100]).is_err());
+    }
+
+    #[tokio::test]
+    async fn converts_between_supported_formats() {
+        let processor = ImageProccessor::new(2);
+        let jpeg = encode_sample(ImageType::Jpeg, 100, 100, 80);
+        let png = encode_sample(ImageType::Png, 100, 100, 80);
+
+        let as_png = processor
+            .process_image(jpeg.clone(), default_options(Some(ImageType::Png)))
+            .await
+            .unwrap();
+        assert!(matches!(as_png.img_type, ImageType::Png));
+        assert_eq!((as_png.width, as_png.height), (100, 100));
+        assert!(matches!(
+            type_from_raw(&as_png.buf).unwrap(),
+            InputImageType::Png
+        ));
+
+        let as_jpeg = processor
+            .process_image(png.clone(), default_options(Some(ImageType::Jpeg)))
+            .await
+            .unwrap();
+        assert!(matches!(as_jpeg.img_type, ImageType::Jpeg));
+        assert_eq!((as_jpeg.width, as_jpeg.height), (100, 100));
+        assert!(matches!(
+            type_from_raw(&as_jpeg.buf).unwrap(),
+            InputImageType::Jpeg
+        ));
+
+        let as_webp = processor
+            .process_image(jpeg, default_options(Some(ImageType::Webp)))
+            .await
+            .unwrap();
+        assert!(matches!(as_webp.img_type, ImageType::Webp));
+        assert!(matches!(
+            type_from_raw(&as_webp.buf).unwrap(),
+            InputImageType::Webp
+        ));
+    }
+
+    #[tokio::test]
+    async fn resizes_with_width_height_and_cover_crop() {
+        let processor = ImageProccessor::new(2);
+        let jpeg = encode_sample(ImageType::Jpeg, 100, 100, 80);
+
+        let width_only = processor
+            .process_image(
+                jpeg.clone(),
+                ProcessOptions {
+                    width: Some(50),
+                    out_type: Some(ImageType::Jpeg),
+                    ..default_options(None)
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!((width_only.width, width_only.height), (50, 50));
+
+        let height_only = processor
+            .process_image(
+                jpeg.clone(),
+                ProcessOptions {
+                    height: Some(25),
+                    out_type: Some(ImageType::Jpeg),
+                    ..default_options(None)
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!((height_only.width, height_only.height), (25, 25));
+
+        let cropped = processor
+            .process_image(
+                jpeg,
+                ProcessOptions {
+                    width: Some(50),
+                    height: Some(30),
+                    out_type: Some(ImageType::Jpeg),
+                    ..default_options(None)
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!((cropped.width, cropped.height), (50, 30));
+    }
+
+    #[tokio::test]
+    async fn applies_blur_and_quality_options() {
+        let processor = ImageProccessor::new(2);
+        let jpeg = encode_sample(ImageType::Jpeg, 128, 96, 90);
+
+        let blurred = processor
+            .process_image(
+                jpeg.clone(),
+                ProcessOptions {
+                    out_type: Some(ImageType::Jpeg),
+                    blur: Some(6),
+                    ..default_options(None)
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!((blurred.width, blurred.height), (128, 96));
+        assert!(matches!(
+            type_from_raw(&blurred.buf).unwrap(),
+            InputImageType::Jpeg
+        ));
+
+        let low_quality = processor
+            .process_image(
+                jpeg.clone(),
+                ProcessOptions {
+                    out_type: Some(ImageType::Jpeg),
+                    quality: Some(10),
+                    ..default_options(None)
+                },
+            )
+            .await
+            .unwrap();
+        let high_quality = processor
+            .process_image(
+                jpeg,
+                ProcessOptions {
+                    out_type: Some(ImageType::Jpeg),
+                    quality: Some(100),
+                    ..default_options(None)
+                },
+            )
+            .await
+            .unwrap();
+        assert!(low_quality.buf.len() < high_quality.buf.len());
+    }
+
+    #[tokio::test]
+    async fn returns_basic_metadata_and_thumbhash() {
+        let processor = ImageProccessor::new(2);
+        let jpeg = encode_sample(ImageType::Jpeg, 100, 80, 80);
+        let expected_size = jpeg.len() as u64;
+
+        let meta = processor
+            .metadata(jpeg, MetadataOptions::new(true))
+            .await
+            .unwrap();
+
+        assert!(matches!(meta.format, InputImageType::Jpeg));
+        assert_eq!((meta.width, meta.height), (100, 80));
+        assert_eq!(meta.size, expected_size);
+        let thumbhash = meta.thumbhash.expect("thumbhash should be present");
+        assert!(STANDARD.decode(thumbhash).is_ok());
+    }
+
+    #[tokio::test]
+    async fn rejects_unsupported_input_data() {
+        let processor = ImageProccessor::new(2);
+        let err = processor
+            .process_image(bytes::Bytes::from(vec![0x42; 100]), default_options(None))
+            .await
+            .unwrap_err();
+
+        assert!(err.to_string().contains("format"));
+    }
+
+    #[tokio::test]
+    async fn limits_concurrent_operations_without_failing() {
+        let processor = ImageProccessor::new(1);
+        let jpeg = encode_sample(ImageType::Jpeg, 64, 64, 80);
+
+        let results = tokio::join!(
+            processor.process_image(
+                jpeg.clone(),
+                ProcessOptions {
+                    width: Some(32),
+                    out_type: Some(ImageType::Jpeg),
+                    ..default_options(None)
+                },
+            ),
+            processor.process_image(
+                jpeg.clone(),
+                ProcessOptions {
+                    width: Some(32),
+                    out_type: Some(ImageType::Jpeg),
+                    ..default_options(None)
+                },
+            ),
+            processor.process_image(
+                jpeg.clone(),
+                ProcessOptions {
+                    width: Some(32),
+                    out_type: Some(ImageType::Jpeg),
+                    ..default_options(None)
+                },
+            )
+        );
+
+        for result in [results.0, results.1, results.2] {
+            let output = result.unwrap();
+            assert_eq!(output.width, 32);
+        }
+    }
+
+    #[tokio::test]
+    async fn encodes_tiff_output() {
+        let processor = ImageProccessor::new(2);
+        let jpeg = encode_sample(ImageType::Jpeg, 48, 48, 80);
+
+        let output = processor
+            .process_image(jpeg, default_options(Some(ImageType::Tiff)))
+            .await
+            .unwrap();
+
+        assert!(matches!(output.img_type, ImageType::Tiff));
+        assert!(matches!(
+            type_from_raw(&output.buf).unwrap(),
+            InputImageType::Tiff
+        ));
+    }
+}

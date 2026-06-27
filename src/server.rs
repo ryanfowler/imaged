@@ -144,15 +144,11 @@ struct ImageQuery {
 
 impl ImageQuery {
     fn is_debug(&self) -> bool {
-        Self::is_enabled(&self.debug)
+        is_query_enabled(&self.debug)
     }
 
     fn is_timing(&self) -> bool {
-        Self::is_enabled(&self.timing)
-    }
-
-    fn is_enabled(v: &Option<String>) -> bool {
-        if let Some(v) = v { v != "false" } else { false }
+        is_query_enabled(&self.timing)
     }
 }
 
@@ -204,20 +200,20 @@ struct MetadataQuery {
 
 impl MetadataQuery {
     fn is_pretty(&self) -> bool {
-        Self::is_enabled(&self.pretty)
+        is_query_enabled(&self.pretty)
     }
 
     fn is_timing(&self) -> bool {
-        Self::is_enabled(&self.timing)
+        is_query_enabled(&self.timing)
     }
 
     fn is_thumbhash(&self) -> bool {
-        Self::is_enabled(&self.thumbhash)
+        is_query_enabled(&self.thumbhash)
     }
+}
 
-    fn is_enabled(v: &Option<String>) -> bool {
-        if let Some(v) = v { v != "false" } else { false }
-    }
+fn is_query_enabled(v: &Option<String>) -> bool {
+    matches!(v.as_deref(), Some(raw) if raw != "0" && !raw.eq_ignore_ascii_case("false"))
 }
 
 #[derive(Serialize)]
@@ -258,5 +254,151 @@ fn options_from_query(query: &ImageQuery, headers: &HeaderMap) -> ProcessOptions
         out_type: query.format.as_ref().and_then(|v| v.format(accept)),
         quality,
         blur,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::HeaderValue;
+
+    fn image_query() -> ImageQuery {
+        ImageQuery {
+            url: "http://example.com/image.jpg".to_string(),
+            quality: None,
+            format: None,
+            debug: None,
+            timing: None,
+            height: None,
+            width: None,
+            blur: None,
+            s: None,
+        }
+    }
+
+    fn metadata_query() -> MetadataQuery {
+        MetadataQuery {
+            url: "http://example.com/image.jpg".to_string(),
+            pretty: None,
+            thumbhash: None,
+            timing: None,
+            s: None,
+        }
+    }
+
+    #[test]
+    fn parses_single_output_format() {
+        assert_eq!(
+            ImageFormats::Format(ImageType::Png).format(None),
+            Some(ImageType::Png)
+        );
+    }
+
+    #[test]
+    fn negotiates_comma_separated_formats_with_accept_header() {
+        let accept = HeaderValue::from_static("image/webp");
+        let formats = ImageFormats::CommaSep("avif,webp,jpeg".to_string());
+
+        assert_eq!(formats.format(Some(&accept)), Some(ImageType::Webp));
+    }
+
+    #[test]
+    fn falls_back_to_last_format_without_accept_match() {
+        let accept = HeaderValue::from_static("image/png");
+        let formats = ImageFormats::CommaSep("avif,webp,jpeg".to_string());
+
+        assert_eq!(formats.format(Some(&accept)), Some(ImageType::Jpeg));
+    }
+
+    #[test]
+    fn ignores_unknown_formats_in_comma_separated_list() {
+        let accept = HeaderValue::from_static("image/webp");
+        let formats = ImageFormats::CommaSep("bmp,webp,jpeg".to_string());
+
+        assert_eq!(formats.format(Some(&accept)), Some(ImageType::Webp));
+    }
+
+    #[test]
+    fn returns_none_when_no_requested_format_is_supported() {
+        let formats = ImageFormats::CommaSep("bmp,gif".to_string());
+
+        assert_eq!(formats.format(None), None);
+    }
+
+    #[test]
+    fn parses_transform_options_from_image_query() {
+        let mut headers = HeaderMap::new();
+        headers.insert("accept", HeaderValue::from_static("image/webp"));
+
+        let mut query = image_query();
+        query.format = Some(ImageFormats::CommaSep("avif,webp,jpeg".to_string()));
+        query.width = Some(120);
+        query.height = Some(80);
+        query.quality = Some(150);
+        query.blur = Some(4);
+
+        let options = options_from_query(&query, &headers);
+
+        assert_eq!(options.width, Some(120));
+        assert_eq!(options.height, Some(80));
+        assert_eq!(options.out_type, Some(ImageType::Webp));
+        assert_eq!(options.quality, Some(100));
+        assert_eq!(options.blur, Some(4));
+    }
+
+    #[test]
+    fn clamps_quality_and_ignores_zero_dimensions_or_blur() {
+        let headers = HeaderMap::new();
+        let mut query = image_query();
+        query.width = Some(0);
+        query.height = Some(0);
+        query.quality = Some(0);
+        query.blur = Some(0);
+
+        let options = options_from_query(&query, &headers);
+
+        assert_eq!(options.width, None);
+        assert_eq!(options.height, None);
+        assert_eq!(options.quality, Some(1));
+        assert_eq!(options.blur, None);
+    }
+
+    #[test]
+    fn image_debug_and_timing_flags_follow_query_boolean_rules() {
+        let mut query = image_query();
+        assert!(!query.is_debug());
+        assert!(!query.is_timing());
+
+        query.debug = Some("false".to_string());
+        query.timing = Some("0".to_string());
+        assert!(!query.is_debug());
+        assert!(!query.is_timing());
+
+        query.debug = Some(String::new());
+        query.timing = Some("1".to_string());
+        assert!(query.is_debug());
+        assert!(query.is_timing());
+    }
+
+    #[test]
+    fn metadata_flags_follow_query_boolean_rules() {
+        let mut query = metadata_query();
+        assert!(!query.is_pretty());
+        assert!(!query.is_thumbhash());
+        assert!(!query.is_timing());
+
+        query.pretty = Some("FALSE".to_string());
+        query.thumbhash = Some("0".to_string());
+        query.timing = Some("false".to_string());
+        assert!(!query.is_pretty());
+        assert!(!query.is_thumbhash());
+        assert!(!query.is_timing());
+
+        query.pretty = Some(String::new());
+        query.thumbhash = Some("true".to_string());
+        query.timing = Some("yes".to_string());
+        assert!(query.is_pretty());
+        assert!(query.is_thumbhash());
+        assert!(query.is_timing());
     }
 }
