@@ -389,11 +389,13 @@ fn encode_tiff(img: &DynamicImage, _quality: u32) -> Result<Vec<u8>> {
 }
 
 fn encode_webp(img: &DynamicImage, quality: u32) -> Result<Vec<u8>> {
-    Ok(webp::Encoder::from_image(img)
-        .map_err(|_| anyhow!("unable to encode image as webp"))?
-        .encode_simple(false, quality as f32)
-        .map_err(|err| anyhow!(format!("webp: {err:?}")))?
-        .to_owned())
+    let rgba = img.to_rgba8();
+    Ok(
+        webpx::Encoder::new_rgba(rgba.as_raw(), rgba.width(), rgba.height())
+            .quality(quality as f32)
+            .encode(webpx::Unstoppable)
+            .map_err(|err| anyhow!("webp: {err}"))?,
+    )
 }
 
 fn metadata_inner(buf: bytes::Bytes, ops: MetadataOptions) -> Result<ImageMetadata> {
