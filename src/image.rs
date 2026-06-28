@@ -1,13 +1,20 @@
-use std::fmt::Display;
+use std::{fmt::Display, io::Cursor};
 
 use anyhow::{Context, Result, anyhow};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use fast_image_resize::{ResizeOptions, Resizer};
 use image::{
-    DynamicImage, GenericImageView, ImageError, ImageFormat, ImageResult,
-    codecs::{avif::AvifEncoder, png::PngEncoder, tiff::TiffEncoder},
+    DynamicImage, GenericImageView, ImageDecoder, ImageError, ImageFormat, ImageResult,
+    codecs::{
+        avif::{AvifDecoder, AvifEncoder},
+        jpeg::JpegDecoder,
+        png::{PngDecoder, PngEncoder},
+        tiff::{TiffDecoder, TiffEncoder},
+        webp::WebPDecoder,
+    },
     error::{ImageFormatHint, UnsupportedError, UnsupportedErrorKind},
 };
+use lcms2::{ColorSpaceSignature, Flags, Intent, PixelFormat, Profile, Transform};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Semaphore;
 
@@ -204,9 +211,18 @@ fn process_image_inner(b: bytes::Bytes, ops: ProcessOptions) -> Result<ImageOutp
     let body = b.as_ref();
     let img_type = type_from_raw(body)?;
     let data = exif::ExifData::new(body);
+    let icc_profile = icc_profile_from_raw(img_type, body);
 
-    let img = decode_image(img_type, body)?;
+    let DecodedImage {
+        img,
+        converted_to_srgb,
+    } = decode_image(img_type, body, icc_profile.as_deref())?;
     let img = auto_orient(&data, img);
+    let img = if converted_to_srgb {
+        img
+    } else {
+        convert_to_srgb(img, icc_profile.as_deref())?
+    };
     let (orig_width, orig_height) = img.dimensions();
 
     let mut out_img = resize(img, ops.width, ops.height)?;
@@ -247,45 +263,114 @@ fn type_from_raw(b: &[u8]) -> ImageResult<InputImageType> {
     })
 }
 
-fn decode_image(img_type: InputImageType, raw: &[u8]) -> Result<DynamicImage> {
-    match img_type {
-        InputImageType::Avif => decode_avif(raw),
-        InputImageType::Jpeg => decode_jpeg(raw),
-        InputImageType::Png => decode_png(raw),
-        InputImageType::Tiff => decode_tiff(raw),
-        InputImageType::Webp => decode_webp(raw),
+struct DecodedImage {
+    img: DynamicImage,
+    converted_to_srgb: bool,
+}
+
+impl DecodedImage {
+    fn srgb(img: DynamicImage) -> Self {
+        Self {
+            img,
+            converted_to_srgb: true,
+        }
     }
+
+    fn unconverted(img: DynamicImage) -> Self {
+        Self {
+            img,
+            converted_to_srgb: false,
+        }
+    }
+}
+
+fn decode_image(
+    img_type: InputImageType,
+    raw: &[u8],
+    icc_profile: Option<&[u8]>,
+) -> Result<DecodedImage> {
+    let img = match img_type {
+        InputImageType::Avif => decode_avif(raw)?,
+        InputImageType::Jpeg => return decode_jpeg(raw, icc_profile),
+        InputImageType::Png => decode_png(raw)?,
+        InputImageType::Tiff => decode_tiff(raw)?,
+        InputImageType::Webp => decode_webp(raw)?,
+    };
+    Ok(DecodedImage::unconverted(img))
 }
 
 fn decode_avif(raw: &[u8]) -> Result<DynamicImage> {
     image::load_from_memory_with_format(raw, ImageFormat::Avif).map_err(Into::into)
 }
 
-fn decode_jpeg(raw: &[u8]) -> Result<DynamicImage> {
+fn decode_jpeg(raw: &[u8], icc_profile: Option<&[u8]>) -> Result<DecodedImage> {
     let header = match turbojpeg::read_header(raw) {
         Ok(header) => header,
-        Err(_) => return decode_jpeg_with_image(raw),
+        Err(_) => return Ok(DecodedImage::unconverted(decode_jpeg_with_image(raw)?)),
     };
     if !matches!(
         header.colorspace,
-        turbojpeg::Colorspace::RGB | turbojpeg::Colorspace::YCbCr | turbojpeg::Colorspace::Gray
+        turbojpeg::Colorspace::RGB
+            | turbojpeg::Colorspace::YCbCr
+            | turbojpeg::Colorspace::Gray
+            | turbojpeg::Colorspace::CMYK
+            | turbojpeg::Colorspace::YCCK
     ) {
-        return decode_jpeg_with_image(raw);
+        return Ok(DecodedImage::unconverted(decode_jpeg_with_image(raw)?));
+    }
+
+    if matches!(
+        header.colorspace,
+        turbojpeg::Colorspace::CMYK | turbojpeg::Colorspace::YCCK
+    ) {
+        if let Ok(Some(img)) = decode_cmyk_jpeg_to_srgb(raw, icc_profile) {
+            return Ok(DecodedImage::srgb(img));
+        }
+        return Ok(DecodedImage::unconverted(decode_jpeg_with_image(raw)?));
     }
 
     let img = match turbojpeg::decompress(raw, turbojpeg::PixelFormat::RGB) {
         Ok(img) => img,
-        Err(_) => return decode_jpeg_with_image(raw),
+        Err(_) => return Ok(DecodedImage::unconverted(decode_jpeg_with_image(raw)?)),
     };
     let width = u32::try_from(img.width).context("jpeg width overflow")?;
     let height = u32::try_from(img.height).context("jpeg height overflow")?;
     let rgb = image::RgbImage::from_raw(width, height, img.pixels)
         .ok_or_else(|| anyhow!("jpeg decoded buffer has invalid dimensions"))?;
-    Ok(DynamicImage::ImageRgb8(rgb))
+    Ok(DecodedImage::unconverted(DynamicImage::ImageRgb8(rgb)))
 }
 
 fn decode_jpeg_with_image(raw: &[u8]) -> Result<DynamicImage> {
     image::load_from_memory_with_format(raw, ImageFormat::Jpeg).map_err(Into::into)
+}
+
+fn decode_cmyk_jpeg_to_srgb(
+    raw: &[u8],
+    icc_profile: Option<&[u8]>,
+) -> Result<Option<DynamicImage>> {
+    let Some(icc_profile) = icc_profile else {
+        return Ok(None);
+    };
+    let input_profile = match Profile::new_icc(icc_profile) {
+        Ok(profile) if profile.color_space() == ColorSpaceSignature::CmykData => profile,
+        _ => return Ok(None),
+    };
+
+    let img = turbojpeg::decompress(raw, turbojpeg::PixelFormat::CMYK)?;
+    let width = u32::try_from(img.width).context("jpeg width overflow")?;
+    let height = u32::try_from(img.height).context("jpeg height overflow")?;
+    let mut rgb = vec![0; img.width * img.height * 3];
+    transform_pixels_to_srgb(
+        &input_profile,
+        PixelFormat::CMYK_8,
+        &img.pixels,
+        PixelFormat::RGB_8,
+        &mut rgb,
+        Flags::BLACKPOINT_COMPENSATION,
+    )?;
+    let rgb = image::RgbImage::from_raw(width, height, rgb)
+        .ok_or_else(|| anyhow!("jpeg decoded buffer has invalid dimensions"))?;
+    Ok(Some(DynamicImage::ImageRgb8(rgb)))
 }
 
 fn decode_png(raw: &[u8]) -> Result<DynamicImage> {
@@ -316,6 +401,147 @@ fn auto_orient(data: &Option<exif::ExifData>, img: DynamicImage) -> DynamicImage
         };
     }
     img
+}
+
+fn icc_profile_from_raw(img_type: InputImageType, raw: &[u8]) -> Option<Vec<u8>> {
+    match img_type {
+        InputImageType::Avif => AvifDecoder::new(Cursor::new(raw))
+            .ok()?
+            .icc_profile()
+            .ok()?,
+        InputImageType::Jpeg => JpegDecoder::new(Cursor::new(raw))
+            .ok()?
+            .icc_profile()
+            .ok()?,
+        InputImageType::Png => PngDecoder::new(Cursor::new(raw)).ok()?.icc_profile().ok()?,
+        InputImageType::Tiff => TiffDecoder::new(Cursor::new(raw))
+            .ok()?
+            .icc_profile()
+            .ok()?,
+        InputImageType::Webp => WebPDecoder::new(Cursor::new(raw))
+            .ok()?
+            .icc_profile()
+            .ok()?,
+    }
+}
+
+fn convert_to_srgb(img: DynamicImage, icc_profile: Option<&[u8]>) -> Result<DynamicImage> {
+    let Some(icc_profile) = icc_profile else {
+        return Ok(img);
+    };
+    let Ok(input_profile) = Profile::new_icc(icc_profile) else {
+        return Ok(img);
+    };
+
+    match input_profile.color_space() {
+        ColorSpaceSignature::RgbData => convert_rgb_image_to_srgb(img, &input_profile),
+        ColorSpaceSignature::GrayData => convert_gray_image_to_srgb(img, &input_profile),
+        _ => Ok(img),
+    }
+}
+
+fn convert_rgb_image_to_srgb(img: DynamicImage, input_profile: &Profile) -> Result<DynamicImage> {
+    if img.has_alpha() {
+        let mut rgba = img.into_rgba8();
+        transform_pixels_in_place_to_srgb(
+            input_profile,
+            PixelFormat::RGBA_8,
+            rgba.as_mut(),
+            Flags::BLACKPOINT_COMPENSATION | Flags::COPY_ALPHA,
+        )?;
+        Ok(DynamicImage::ImageRgba8(rgba))
+    } else {
+        let mut rgb = img.into_rgb8();
+        transform_pixels_in_place_to_srgb(
+            input_profile,
+            PixelFormat::RGB_8,
+            rgb.as_mut(),
+            Flags::BLACKPOINT_COMPENSATION,
+        )?;
+        Ok(DynamicImage::ImageRgb8(rgb))
+    }
+}
+
+fn convert_gray_image_to_srgb(img: DynamicImage, input_profile: &Profile) -> Result<DynamicImage> {
+    match img {
+        DynamicImage::ImageLuma8(gray) => {
+            let (width, height) = gray.dimensions();
+            let mut rgb = vec![0; gray.as_raw().len() * 3];
+            transform_pixels_to_srgb(
+                input_profile,
+                PixelFormat::GRAY_8,
+                gray.as_raw(),
+                PixelFormat::RGB_8,
+                &mut rgb,
+                Flags::BLACKPOINT_COMPENSATION,
+            )?;
+            let rgb = image::RgbImage::from_raw(width, height, rgb)
+                .ok_or_else(|| anyhow!("gray decoded buffer has invalid dimensions"))?;
+            Ok(DynamicImage::ImageRgb8(rgb))
+        }
+        DynamicImage::ImageLumaA8(gray_alpha) => {
+            let (width, height) = gray_alpha.dimensions();
+            let gray: Vec<u8> = gray_alpha.pixels().map(|pixel| pixel.0[0]).collect();
+            let mut rgb = vec![0; gray.len() * 3];
+            transform_pixels_to_srgb(
+                input_profile,
+                PixelFormat::GRAY_8,
+                &gray,
+                PixelFormat::RGB_8,
+                &mut rgb,
+                Flags::BLACKPOINT_COMPENSATION,
+            )?;
+            let mut rgba = Vec::with_capacity(gray.len() * 4);
+            for (rgb, gray_alpha) in rgb.chunks_exact(3).zip(gray_alpha.pixels()) {
+                rgba.extend_from_slice(rgb);
+                rgba.push(gray_alpha.0[1]);
+            }
+            let rgba = image::RgbaImage::from_raw(width, height, rgba)
+                .ok_or_else(|| anyhow!("gray alpha decoded buffer has invalid dimensions"))?;
+            Ok(DynamicImage::ImageRgba8(rgba))
+        }
+        img => Ok(img),
+    }
+}
+
+fn transform_pixels_in_place_to_srgb(
+    input_profile: &Profile,
+    format: PixelFormat,
+    pixels: &mut [u8],
+    flags: Flags,
+) -> Result<()> {
+    let output_profile = Profile::new_srgb();
+    let transform = Transform::<u8, u8>::new_flags(
+        input_profile,
+        format,
+        &output_profile,
+        format,
+        Intent::Perceptual,
+        flags,
+    )?;
+    transform.transform_in_place(pixels);
+    Ok(())
+}
+
+fn transform_pixels_to_srgb(
+    input_profile: &Profile,
+    input_format: PixelFormat,
+    src: &[u8],
+    output_format: PixelFormat,
+    dst: &mut [u8],
+    flags: Flags,
+) -> Result<()> {
+    let output_profile = Profile::new_srgb();
+    let transform = Transform::<u8, u8>::new_flags(
+        input_profile,
+        input_format,
+        &output_profile,
+        output_format,
+        Intent::Perceptual,
+        flags,
+    )?;
+    transform.transform_pixels(src, dst);
+    Ok(())
 }
 
 fn resize(img: DynamicImage, width: Option<u32>, height: Option<u32>) -> Result<DynamicImage> {
@@ -442,8 +668,17 @@ fn encode_webp(img: &DynamicImage, quality: u32) -> Result<Vec<u8>> {
 fn metadata_inner(buf: bytes::Bytes, ops: MetadataOptions) -> Result<ImageMetadata> {
     let format = type_from_raw(&buf)?;
     let edata = exif::ExifData::new(&buf);
-    let img = decode_image(format, &buf)?;
+    let icc_profile = icc_profile_from_raw(format, &buf);
+    let DecodedImage {
+        img,
+        converted_to_srgb,
+    } = decode_image(format, &buf, icc_profile.as_deref())?;
     let img = auto_orient(&edata, img);
+    let img = if converted_to_srgb {
+        img
+    } else {
+        convert_to_srgb(img, icc_profile.as_deref())?
+    };
     let (width, height) = img.dimensions();
     let thumbhash = ops.thumbhash.then(|| get_thumbhash(img));
 
@@ -562,10 +797,11 @@ mod tests {
     #[test]
     fn decodes_common_jpegs_to_rgb() {
         let jpeg = encode_sample(ImageType::Jpeg, 32, 24, 80);
-        let img = decode_jpeg(&jpeg).unwrap();
+        let decoded = decode_jpeg(&jpeg, None).unwrap();
 
-        assert_eq!(img.dimensions(), (32, 24));
-        assert!(matches!(img, DynamicImage::ImageRgb8(_)));
+        assert_eq!(decoded.img.dimensions(), (32, 24));
+        assert!(!decoded.converted_to_srgb);
+        assert!(matches!(decoded.img, DynamicImage::ImageRgb8(_)));
     }
 
     #[test]
@@ -585,6 +821,42 @@ mod tests {
             normalize_output_image(rgba, ImageType::Jpeg),
             DynamicImage::ImageRgb8(_)
         ));
+    }
+
+    #[test]
+    fn converts_rgb_icc_profile_to_srgb() {
+        let white_point = lcms2::CIExyY {
+            x: 0.3127,
+            y: 0.3290,
+            Y: 1.0,
+        };
+        let primaries = lcms2::CIExyYTRIPLE {
+            Red: lcms2::CIExyY {
+                x: 0.6400,
+                y: 0.3300,
+                Y: 1.0,
+            },
+            Green: lcms2::CIExyY {
+                x: 0.3000,
+                y: 0.6000,
+                Y: 1.0,
+            },
+            Blue: lcms2::CIExyY {
+                x: 0.1500,
+                y: 0.0600,
+                Y: 1.0,
+            },
+        };
+        let linear = lcms2::ToneCurve::new(1.0);
+        let input_profile =
+            Profile::new_rgb(&white_point, &primaries, &[&linear, &linear, &linear]).unwrap();
+        let icc = input_profile.icc().unwrap();
+        let img = DynamicImage::ImageRgb8(ImageBuffer::from_pixel(1, 1, Rgb([128, 128, 128])));
+
+        let converted = convert_to_srgb(img, Some(&icc)).unwrap();
+
+        let converted = converted.into_rgb8();
+        assert!(converted.get_pixel(0, 0).0[0] > 128);
     }
 
     #[test]

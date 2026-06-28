@@ -31,6 +31,7 @@ hex = "0.4.3"
 hmac = "0.13.0"
 image = { version = "0.25.10", default-features = false, features = ["avif", "avif-native", "jpeg", "png", "tiff", "webp"] }
 kamadak-exif = "0.6.1"
+lcms2 = "6.1.1"
 memchr = "2.8.2"
 mimalloc = { version = "0.1.52" }
 reqwest = "0.13.4"
