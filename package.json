@@ -15,7 +15,7 @@
     "typescript": "6.0.3"
   },
   "dependencies": {
-    "@fastify/multipart": "10.0.0",
+    "@fastify/multipart": "10.1.0",
     "commander": "15.0.0",
     "exif-reader": "2.0.3",
     "fastify": "5.9.0",
