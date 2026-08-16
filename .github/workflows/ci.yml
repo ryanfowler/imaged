@@ -3,31 +3,17 @@ name: ci
 on:
   pull_request:
     branches: ["main"]
-  pull_request_target:
-    branches: ["main"]
   push:
     branches: ["main"]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
-    # Avoid duplicate runs:
-    # - pull_request: only for non-Dependabot PRs
-    # - pull_request_target: only for Dependabot PRs (has permissions to push)
-    # - push: always run
-    if: |
-      github.event_name == 'push' ||
-      (github.event_name == 'pull_request' && github.actor != 'dependabot[bot]') ||
-      (github.event_name == 'pull_request_target' && github.actor == 'dependabot[bot]')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          # For pull_request_target, checkout the PR branch (not base)
-          ref: ${{ github.event.pull_request.head.ref || github.ref }}
-          token: ${{ secrets.PAT_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
@@ -35,19 +21,7 @@ jobs:
           bun-version: latest
 
       - name: Install dependencies
-        run: bun install
-
-      # For Dependabot PRs, commit updated lockfile if changed.
-      - name: Update lockfile for Dependabot
-        if: github.actor == 'dependabot[bot]'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add bun.lock
-          if ! git diff --staged --quiet; then
-            git commit -m "chore: update bun.lock"
-            git push
-          fi
+        run: bun install --frozen-lockfile
 
       - name: Check formatting
         run: bunx prettier . --check
